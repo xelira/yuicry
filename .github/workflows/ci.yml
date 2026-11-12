@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-checks:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: License file is present
+        run: |
+          test -f LICENSE
+          grep -q "GNU AFFERO GENERAL PUBLIC LICENSE" LICENSE
+
+      - name: No CRLF line endings
+        run: |
+          if git ls-files --eol | grep -E '^i/(crlf|mixed)'; then
+            echo "::error::CRLF or mixed line endings found; see .gitattributes"
+            exit 1
+          fi
+
+      - name: No merge conflict markers
+        run: |
+          if git grep -nE '^(<<<<<<< |>>>>>>> )' -- . ; then
+            echo "::error::Merge conflict markers found"
+            exit 1
+          fi
+
+      - name: License required files are referenced
+        run: |
+          for f in LICENSE CLA.md COMMERCIAL.md CONTRIBUTING.md SECURITY.md; do
+            test -f "$f" || { echo "::error::Missing $f"; exit 1; }
+          done
+
+  # Placeholder for the build and test jobs. Add them here once the project has code:
+  #
+  # build:
+  #   name: Build and test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: ...
