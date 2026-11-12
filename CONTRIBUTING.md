@@ -17,7 +17,7 @@ I have read the CLA.md and I hereby sign the CLA.
 
 Add your full legal name. If you contribute as part of your job, confirm that your
 employer allows it or has waived its rights. One signature covers your later pull
-requests.
+requests. CI fails the pull request until the line is there.
 
 ## Bug reports
 
