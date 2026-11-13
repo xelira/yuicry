@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/xelira/yuicry/security/advisories/new
+    about: Report security issues privately. Never open a public issue for them.
+  - name: Commercial licensing
+    url: https://github.com/xelira/yuicry/blob/main/COMMERCIAL.md
+    about: Using yuicry in a closed-source product or a hosted service.
+  - name: Questions about the license
+    url: https://github.com/xelira/yuicry/blob/main/LICENSE
+    about: The AGPL-3.0 text and what it requires.

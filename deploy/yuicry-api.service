@@ -1,0 +1,21 @@
+[Unit]
+Description=yuicry api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yuicry
+Group=yuicry
+EnvironmentFile=/etc/yuicry/api.env
+ExecStart=/usr/local/bin/yuicry-api
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/yuicry
+
+[Install]
+WantedBy=multi-user.target
