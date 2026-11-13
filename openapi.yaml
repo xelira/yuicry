@@ -1,0 +1,590 @@
+openapi: 3.1.0
+info:
+  title: yuicry API
+  version: 1.4.0
+  description: Музыкальный сервис yuicry. Все запросы, кроме публичных, используют cookie-сессию.
+servers:
+  - url: https://yuicry.owaw.online
+
+security:
+  - session: []
+
+paths:
+  /api/health:
+    get:
+      security: []
+      summary: Проверка живости
+      responses:
+        "200":
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /api/version:
+    get:
+      security: []
+      summary: Версия API и ссылка на APK
+      responses:
+        "200":
+          description: Версия
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  url:
+                    type: string
+
+  /api/search:
+    get:
+      summary: Поиск треков
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: index
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Найденные треки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+                  more:
+                    type: boolean
+
+  /api/wave:
+    get:
+      summary: Подборка «Моя волна»
+      parameters:
+        - name: genre
+          in: query
+          required: false
+          description: ID жанра Deezer; без параметра волна строится по лайкам
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Треки волны
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+
+  /api/similar/{id}:
+    get:
+      summary: Похожие треки
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "200":
+          description: Похожие треки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+
+  /api/artist/{id}:
+    get:
+      summary: Артист и его треки
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Артист
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  artist:
+                    $ref: "#/components/schemas/Artist"
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+
+  /api/album/{id}:
+    get:
+      summary: Альбом и его треки
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Альбом
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  album:
+                    $ref: "#/components/schemas/CatalogAlbum"
+
+  /api/track/{id}:
+    get:
+      summary: Метаданные трека
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "200":
+          description: Трек
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Track"
+
+  /api/stream/{id}:
+    get:
+      summary: Аудио трека
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "200":
+          description: Аудио
+          content:
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+        "502":
+          $ref: "#/components/responses/Error"
+
+  /api/download/{id}:
+    post:
+      summary: Запустить загрузку
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "202":
+          description: Задача создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadStatus"
+    get:
+      summary: Состояние загрузки
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "200":
+          description: Состояние
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadStatus"
+
+  /api/download/{id}/events:
+    get:
+      summary: Прогресс загрузки по SSE
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "200":
+          description: Поток событий
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/reaction:
+    post:
+      summary: Лайк, дизлайк или скип
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [track_id, kind]
+              properties:
+                track_id:
+                  type: string
+                kind:
+                  type: string
+                  enum: [like, unlike, dislike, skip]
+                title:
+                  type: string
+                artist:
+                  type: string
+                cover_big:
+                  type: string
+                duration:
+                  type: integer
+                artist_id:
+                  type: string
+                album:
+                  type: string
+                album_id:
+                  type: string
+      responses:
+        "200":
+          description: Реакция записана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/likes:
+    get:
+      summary: Избранное
+      responses:
+        "200":
+          description: Треки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+
+  /api/albums:
+    get:
+      summary: Плейлисты
+      responses:
+        "200":
+          description: Плейлисты
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  albums:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Playlist"
+    post:
+      summary: Создать плейлист
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+      responses:
+        "200":
+          description: Плейлист
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Playlist"
+
+  /api/albums/{id}:
+    get:
+      summary: Треки плейлиста
+      parameters:
+        - $ref: "#/components/parameters/PlaylistID"
+      responses:
+        "200":
+          description: Треки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+    patch:
+      summary: Переименовать или сменить обложку
+      parameters:
+        - $ref: "#/components/parameters/PlaylistID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                cover:
+                  type: string
+      responses:
+        "200":
+          description: Обновлено
+    delete:
+      summary: Удалить плейлист
+      parameters:
+        - $ref: "#/components/parameters/PlaylistID"
+      responses:
+        "200":
+          description: Удалено
+
+  /api/albums/{id}/tracks:
+    post:
+      summary: Добавить трек
+      parameters:
+        - $ref: "#/components/parameters/PlaylistID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Track"
+      responses:
+        "200":
+          description: Добавлено
+
+  /api/albums/{id}/tracks/{track}:
+    delete:
+      summary: Убрать трек
+      parameters:
+        - $ref: "#/components/parameters/PlaylistID"
+        - name: track
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Убрано
+
+  /api/lyrics:
+    get:
+      summary: Текст песни
+      parameters:
+        - name: title
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: artist
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: duration
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Текст
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lyrics"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/playback:
+    get:
+      summary: Состояние воспроизведения
+      responses:
+        "200":
+          description: Состояние
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackState"
+    post:
+      summary: Обновить состояние
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaybackState"
+      responses:
+        "200":
+          description: Сохранено
+
+  /api/playback/stream:
+    get:
+      summary: Состояние воспроизведения по SSE
+      responses:
+        "200":
+          description: Поток событий
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: yuicry_session
+
+  parameters:
+    TrackID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    PlaylistID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+  schemas:
+    Track:
+      type: object
+      required: [id, title, artist, duration, cover_big]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        duration:
+          type: integer
+        cover_big:
+          type: string
+        artist_id:
+          type: string
+        album:
+          type: string
+        album_id:
+          type: string
+
+    Artist:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        picture:
+          type: string
+
+    CatalogAlbum:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        cover:
+          type: string
+        artist:
+          type: string
+        artist_id:
+          type: string
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Track"
+
+    Playlist:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        count:
+          type: integer
+        cover:
+          type: string
+
+    DownloadStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+          enum: [queued, downloading, done, error, missing]
+        percent:
+          type: integer
+        bytes:
+          type: integer
+        total:
+          type: integer
+        error:
+          type: string
+
+    Lyrics:
+      type: object
+      properties:
+        synced:
+          type: string
+        plain:
+          type: string
+
+    PlaybackState:
+      type: object
+      properties:
+        device:
+          type: string
+        track:
+          $ref: "#/components/schemas/Track"
+        position:
+          type: number
+        playing:
+          type: boolean
+        updated_at:
+          type: integer

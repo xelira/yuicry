@@ -1,0 +1,21 @@
+[Unit]
+Description=yuicry storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yuicry
+Group=yuicry
+EnvironmentFile=/etc/yuicry/storage.env
+ExecStart=/usr/local/bin/yuicry-storage
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/yuicry
+
+[Install]
+WantedBy=multi-user.target
