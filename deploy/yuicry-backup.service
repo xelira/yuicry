@@ -1,0 +1,6 @@
+[Unit]
+Description=yuicry database backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/yuicry-backup

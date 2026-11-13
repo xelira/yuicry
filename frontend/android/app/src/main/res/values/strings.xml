@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">yuicry</string>
+    <string name="title_activity_main">yuicry</string>
+    <string name="package_name">online.owaw.yuicry</string>
+    <string name="custom_url_scheme">online.owaw.yuicry</string>
+</resources>
