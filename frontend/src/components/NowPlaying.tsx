@@ -1,0 +1,248 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Heart, Pause, Play, Repeat, Repeat1, SkipBack, SkipForward } from "lucide-react";
+
+import Aurora from "@/components/Aurora";
+import TrackMenu from "@/components/TrackMenu";
+import { audioElement } from "@/lib/audio";
+import { fallbackPalette, paletteFromCover, type Palette } from "@/lib/palette";
+import { currentTrack, usePlayer } from "@/store/playerStore";
+
+function formatTime(value: number) {
+  if (!Number.isFinite(value) || value < 0) return "0:00";
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+export default function NowPlaying() {
+  const open = usePlayer((state) => state.fullscreen);
+  const track = usePlayer(currentTrack);
+  const playing = usePlayer((state) => state.playing);
+  const repeat = usePlayer((state) => state.repeat);
+  const liked = usePlayer((state) => (track ? Boolean(state.likes[track.id]) : false));
+
+  const setFullscreen = usePlayer((state) => state.setFullscreen);
+  const toggle = usePlayer((state) => state.toggle);
+  const next = usePlayer((state) => state.next);
+  const previous = usePlayer((state) => state.previous);
+  const setRepeat = usePlayer((state) => state.setRepeat);
+  const toggleLike = usePlayer((state) => state.toggleLike);
+  const dislike = usePlayer((state) => state.dislike);
+  const playQueue = usePlayer((state) => state.playQueue);
+
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [palette, setPalette] = useState<Palette>(fallbackPalette);
+
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!track) return;
+
+    let alive = true;
+    paletteFromCover(track.cover_big).then((colors) => {
+      if (alive) setPalette(colors);
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [track?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const audio = audioElement();
+    const onTime = () => setTime(audio.currentTime);
+    const onMeta = () => setDuration(audio.duration || 0);
+
+    audio.addEventListener("timeupdate", onTime);
+    audio.addEventListener("loadedmetadata", onMeta);
+
+    setTime(audio.currentTime);
+    setDuration(audio.duration || track?.duration || 0);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      audio.removeEventListener("timeupdate", onTime);
+      audio.removeEventListener("loadedmetadata", onMeta);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreen(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const cycleRepeat = () => {
+    if (repeat === "off") setRepeat("all");
+    else if (repeat === "all") setRepeat("one");
+    else setRepeat("off");
+  };
+
+  const playSimilar = async () => {
+    if (!track) return;
+
+    const response = await fetch(`/api/similar/${track.id}`);
+    if (!response.ok) return;
+
+    const data = await response.json();
+    if (data.tracks?.length) playQueue(data.tracks);
+  };
+
+  if (!open || !track) return null;
+
+  const seek = (clientX: number) => {
+    const bar = barRef.current;
+    const audio = audioElement();
+    if (!bar || !duration) return;
+
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    audio.currentTime = ratio * duration;
+    setTime(ratio * duration);
+  };
+
+  const progress = duration > 0 ? Math.min(time / duration, 1) : 0;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black">
+      <Aurora colors={palette} />
+
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/5 to-black/65" />
+
+      <div className="relative flex h-full flex-col px-5 pb-[calc(20px+var(--inset-bottom,0px))] pt-[calc(20px+var(--inset-top,0px))] sm:px-10 sm:pb-[calc(28px+var(--inset-bottom,0px))] sm:pt-[calc(28px+var(--inset-top,0px))]">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setFullscreen(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+            aria-label="Свернуть"
+          >
+            <ChevronDown size={22} />
+          </button>
+
+          <span className="w-9" />
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 py-4">
+          <img
+            src={track.cover_big}
+            alt=""
+            className="h-[min(60vw,36vh,380px)] w-[min(60vw,36vh,380px)] rounded-2xl border border-white/20 object-cover shadow-2xl"
+          />
+
+          <div className="max-w-[640px] px-2 text-center">
+            <h1 className="line-clamp-2 pb-1 text-[clamp(22px,3.6vw,38px)] font-semibold leading-[1.15] tracking-tight text-white">
+              {track.title}
+            </h1>
+            <p className="mt-1.5 text-[14px] text-white/65">{track.artist}</p>
+          </div>
+        </div>
+
+        <div className="mx-auto w-full max-w-[640px] shrink-0">
+          <div
+            ref={barRef}
+            role="slider"
+            aria-label="Перемотка"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(time)}
+            className="group relative h-8 w-full cursor-pointer touch-none"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              seek(event.clientX);
+            }}
+            onPointerMove={(event) => {
+              if (event.buttons === 1) seek(event.clientX);
+            }}
+          >
+            <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 rounded-full bg-white/25" />
+            <div
+              className="absolute top-1/2 h-[6px] -translate-y-1/2 rounded-full bg-white"
+              style={{ width: `${progress * 100}%` }}
+            />
+            <span
+              className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-lg"
+              style={{ left: `${progress * 100}%` }}
+            />
+          </div>
+
+          <div className="mt-1 flex justify-between text-[12px] tabular-nums text-white/70">
+            <span>{formatTime(time)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
+            <div className="flex items-center justify-end gap-1">
+              <button
+                onClick={() => void toggleLike(track)}
+                className={`flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 ${
+                  liked ? "text-white" : "text-white/70 hover:text-white"
+                }`}
+                aria-label="Лайк"
+              >
+                <Heart size={20} fill={liked ? "currentColor" : "none"} />
+              </button>
+
+              <button
+                onClick={previous}
+                className="flex h-11 w-11 items-center justify-center rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+                aria-label="Назад"
+              >
+                <SkipBack size={21} />
+              </button>
+            </div>
+
+            <button
+              onClick={toggle}
+              className="mx-3 flex h-16 w-16 items-center justify-center rounded-full bg-white text-black transition hover:bg-white/90"
+              aria-label={playing ? "Пауза" : "Играть"}
+            >
+              {playing ? (
+                <Pause size={22} fill="currentColor" />
+              ) : (
+                <Play size={22} fill="currentColor" className="ml-0.5" />
+              )}
+            </button>
+
+            <div className="flex items-center justify-start gap-1">
+              <button
+                onClick={next}
+                className="flex h-11 w-11 items-center justify-center rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+                aria-label="Вперёд"
+              >
+                <SkipForward size={21} />
+              </button>
+
+              <button
+                onClick={cycleRepeat}
+                className={`flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 ${
+                  repeat === "off" ? "text-white/70 hover:text-white" : "text-white"
+                }`}
+                aria-label="Повтор"
+              >
+                {repeat === "one" ? <Repeat1 size={19} /> : <Repeat size={19} />}
+              </button>
+
+              <TrackMenu
+                track={track}
+                liked={liked}
+                onSimilar={() => void playSimilar()}
+                onDislike={() => void dislike(track)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
