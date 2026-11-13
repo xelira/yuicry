@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Go binaries
+        working-directory: .
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -C backend -trimpath -buildvcs=false -ldflags "-s -w -X main.Version=$VERSION" -o ../dist/yuicry-api-linux-amd64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -C backend -trimpath -buildvcs=false -ldflags "-s -w" -o ../dist/yuicry-storage-linux-amd64 ./cmd/storage
+
+      - name: Install
+        run: npm ci
+
+      - name: Build web
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Keystore
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Assemble release
+        working-directory: frontend/android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          YUICRY_KEYSTORE: ${{ runner.temp }}/release.jks
+          YUICRY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          YUICRY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          YUICRY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Checksums
+        working-directory: .
+        run: |
+          cp frontend/android/app/build/outputs/apk/release/app-release.apk dist/yuicry-android.apk
+          cd dist
+          sha256sum yuicry-api-linux-amd64 yuicry-storage-linux-amd64 yuicry-android.apk > checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/yuicry-api-linux-amd64
+            dist/yuicry-storage-linux-amd64
+            dist/yuicry-android.apk
+            dist/checksums.txt
