@@ -1,0 +1,13 @@
+dist/
+backend/dist/
+backend/data/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+cache/
+*.db
+*.db-shm
+*.db-wal
+
+dist/
