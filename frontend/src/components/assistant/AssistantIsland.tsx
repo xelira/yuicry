@@ -5,6 +5,7 @@ import { Maximize2, Mic, MicOff, X } from "lucide-react";
 import AssistantIcon from "@/components/AssistantIcon";
 import { coverSource } from "@/lib/audio";
 import type { AssistantAttachment } from "@/lib/assistant";
+import { pluralRu } from "@/lib/plural";
 import type { AssistantMessage } from "@/store/assistantStore";
 import type { Track } from "@/store/playerStore";
 
@@ -49,7 +50,7 @@ export default function AssistantIsland({
       ? "Ассистент"
       : last
         ? last.tracks?.length
-          ? `${last.tracks.length} треков`
+          ? `${last.tracks.length} ${pluralRu(last.tracks.length, "трек", "трека", "треков")}`
           : "Ассистент"
         : attachment
           ? attachment.kind === "track"

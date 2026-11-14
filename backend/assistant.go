@@ -518,6 +518,25 @@ func notFoundReply(value string) string {
 	return "Не нашёл «" + query + "». Попробуй назвать иначе или скажи исполнителя."
 }
 
+func pluralTracks(count int) string {
+	value := count % 100
+	last := value % 10
+
+	if value > 10 && value < 20 {
+		return "треков"
+	}
+
+	if last == 1 {
+		return "трек"
+	}
+
+	if last >= 2 && last <= 4 {
+		return "трека"
+	}
+
+	return "треков"
+}
+
 func attachmentQuery(info AssistantContext) string {
 	if info.Attachment == nil {
 		return ""
@@ -546,7 +565,7 @@ func attachmentReply(info AssistantContext) string {
 		return "Прикреплён трек «" + info.Attachment.Title + "» — " + info.Attachment.Artist + ". Спроси, что это, или попроси похожее."
 	}
 
-	return fmt.Sprintf("Прикреплён плейлист «%s» (%d треков). Спроси, что это, или попроси похожее.", info.Attachment.Title, info.Attachment.Count)
+	return fmt.Sprintf("Прикреплён плейлист «%s» (%d %s). Спроси, что это, или попроси похожее.", info.Attachment.Title, info.Attachment.Count, pluralTracks(info.Attachment.Count))
 }
 
 func likesReply(tracks []Track) string {
@@ -665,7 +684,7 @@ func assistantPrompt(info AssistantContext) string {
 		if attachment.Kind == "track" {
 			fmt.Fprintf(&context, "\nПользователь прикрепил трек «%s» — %s.", attachment.Title, attachment.Artist)
 		} else if attachment.Kind == "playlist" {
-			fmt.Fprintf(&context, "\nПользователь прикрепил плейлист «%s» (%d треков).", attachment.Title, attachment.Count)
+			fmt.Fprintf(&context, "\nПользователь прикрепил плейлист «%s» (%d %s).", attachment.Title, attachment.Count, pluralTracks(attachment.Count))
 			for index, value := range attachment.Tracks {
 				if index >= 10 {
 					break

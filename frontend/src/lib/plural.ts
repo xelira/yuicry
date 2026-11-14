@@ -1,8 +1,9 @@
 export function pluralRu(count: number, one: string, few: string, many: string) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
+  const value = Math.abs(count) % 100;
+  const last = value % 10;
 
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  if (value > 10 && value < 20) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
   return many;
 }

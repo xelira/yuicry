@@ -16,6 +16,7 @@ import AssistantIcon from "@/components/AssistantIcon";
 import AssistantMessageView from "@/components/assistant/AssistantMessageView";
 import { coverSource } from "@/lib/audio";
 import type { AssistantAttachment } from "@/lib/assistant";
+import { pluralRu } from "@/lib/plural";
 import type { AssistantMessage } from "@/store/assistantStore";
 import type { Track } from "@/store/playerStore";
 
@@ -232,7 +233,7 @@ export default function AssistantPanel({
                 <p className="truncate text-[10px] text-muted">
                   {attachment.kind === "track"
                     ? attachment.artist
-                    : `${attachment.count ?? 0} треков`}
+                    : `${attachment.count ?? 0} ${pluralRu(attachment.count ?? 0, "трек", "трека", "треков")}`}
                 </p>
               </div>
 
