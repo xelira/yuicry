@@ -68,7 +68,12 @@ export function speechSupported() {
     webkitSpeechRecognition?: RecognitionConstructor;
   };
 
-  return Boolean(scope.SpeechRecognition || scope.webkitSpeechRecognition);
+  if (scope.SpeechRecognition || scope.webkitSpeechRecognition) return true;
+
+  return (
+    typeof MediaRecorder !== "undefined" &&
+    typeof navigator.mediaDevices?.getUserMedia === "function"
+  );
 }
 
 export function ttsSupported() {
@@ -140,7 +145,7 @@ export function listen(
   };
 
   const Constructor = scope.SpeechRecognition ?? scope.webkitSpeechRecognition;
-  if (!Constructor) throw new Error("Распознавание речи недоступно");
+  if (!Constructor) return recordSession(onStatus);
 
   const recognition = new Constructor();
   let finalText = "";
@@ -185,6 +190,74 @@ export function listen(
   return {
     result,
     stop: () => recognition.stop(),
+  };
+}
+
+function recordSession(onStatus?: (text: string) => void): ListeningSession {
+  const result = (async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"].find(
+      (value) => MediaRecorder.isTypeSupported(value),
+    );
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks: BlobPart[] = [];
+
+    const finished = new Promise<string>((resolve, reject) => {
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+
+      recorder.onerror = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        reject(new Error("Не получилось записать речь"));
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+
+        try {
+          const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+
+          if (blob.size < 1024) {
+            reject(new Error("Не расслышал, попробуй ещё раз"));
+            return;
+          }
+
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": blob.type || "application/octet-stream" },
+            body: blob,
+          });
+
+          if (!response.ok) throw new Error("Распознавание недоступно");
+
+          const data = await response.json();
+          const text = String(data.text ?? "").trim();
+
+          if (text) resolve(text);
+          else reject(new Error("Не расслышал, попробуй ещё раз"));
+        } catch (failure) {
+          reject(failure instanceof Error ? failure : new Error("Распознавание недоступно"));
+        }
+      };
+    });
+
+    recorder.start();
+    onStatus?.("Слушаю… Нажми ещё раз, чтобы отправить");
+
+    return {
+      result: finished,
+      stop: () => {
+        if (recorder.state !== "inactive") recorder.stop();
+      },
+    };
+  })();
+
+  return {
+    result: result.then((session) => session.result),
+    stop: () => {
+      void result.then((session) => session.stop()).catch(() => undefined);
+    },
   };
 }
 

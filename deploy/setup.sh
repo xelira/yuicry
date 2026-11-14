@@ -63,6 +63,7 @@ OIDC_REDIRECT=https://yuicry.owaw.online/api/auth/callback
 SESSION_SECRET=$secret
 COOKIE_SECURE=1
 TTS_URL=http://127.0.0.1:8790
+STT_URL=http://127.0.0.1:8791
 EOF
 
   if [ -n "${NVIDIA_API_KEY:-}" ]; then
@@ -109,6 +110,21 @@ deploy_api() {
   systemctl daemon-reload
   systemctl enable --now yuicry-tts
   systemctl restart yuicry-tts
+
+  say "распознавание"
+  python3 -m pip install -q --break-system-packages vosk
+  install -d /opt/yuicry-stt-model
+  if [ ! -f /opt/yuicry-stt-model/am/final.mdl ]; then
+    curl -fsSL https://get.owaw.online/vosk-model-small-ru.zip -o /tmp/vosk-ru.zip
+    unzip -q -o /tmp/vosk-ru.zip -d /tmp/vosk-extract
+    cp -a /tmp/vosk-extract/vosk-model-small-ru-0.22/. /opt/yuicry-stt-model/
+    rm -rf /tmp/vosk-extract /tmp/vosk-ru.zip
+  fi
+  install -m 755 "$here/yuicry-stt.py" /usr/local/bin/yuicry-stt
+  install -m 644 "$here/yuicry-stt.service" /etc/systemd/system/yuicry-stt.service
+  systemctl daemon-reload
+  systemctl enable --now yuicry-stt
+  systemctl restart yuicry-stt
 
   say "systemd"
   install -m 644 "$here/yuicry-api.service" /etc/systemd/system/yuicry-api.service

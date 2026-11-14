@@ -180,6 +180,37 @@ paths:
         "429":
           description: Слишком много запросов
 
+  /api/transcribe:
+    post:
+      summary: Распознать речь
+      requestBody:
+        required: true
+        content:
+          audio/webm:
+            schema:
+              type: string
+              format: binary
+          audio/mpeg:
+            schema:
+              type: string
+              format: binary
+          audio/wav:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Текст записи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text:
+                    type: string
+        "502":
+          description: Распознавание недоступно
+
   /api/tts:
     get:
       summary: Озвучка текста

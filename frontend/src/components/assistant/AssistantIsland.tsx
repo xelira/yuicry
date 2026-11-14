@@ -17,6 +17,7 @@ type Props = {
   last: AssistantMessage | null;
   track: Track | null;
   attachment: AssistantAttachment | null;
+  available: boolean;
   onMic: () => void;
   onExpand: () => void;
   onHide: () => void;
@@ -30,6 +31,7 @@ export default function AssistantIsland({
   last,
   track,
   attachment,
+  available,
   onMic,
   onExpand,
   onHide,
@@ -38,27 +40,31 @@ export default function AssistantIsland({
     ? status || "Слушаю…"
     : busy
       ? "Думаю…"
-      : error || last?.text || "Спроси про музыку";
+      : last?.text || (attachment ? "Спроси про вложение" : "Спроси про музыку");
 
   const preparing = status.includes("Загружаю") || status.includes("Готовлю") || status.includes("модель");
 
-  const subtitle = listening
-    ? preparing
-      ? "Первый запуск"
-      : "Говори…"
-    : busy
-      ? "Ассистент"
-      : last
-        ? last.tracks?.length
-          ? `${last.tracks.length} ${pluralRu(last.tracks.length, "трек", "трека", "треков")}`
-          : "Ассистент"
-        : attachment
-          ? attachment.kind === "track"
-            ? `Трек: ${attachment.title}`
-            : `Плейлист: ${attachment.title}`
-          : track
-            ? `${track.title} — ${track.artist}`
-            : "Голосовой помощник";
+  const subtitle = error
+    ? error
+    : listening
+      ? preparing
+        ? "Первый запуск"
+        : "Говори…"
+      : busy
+        ? "Ассистент"
+        : !available
+          ? "Голосовой ввод недоступен"
+          : last
+            ? last.tracks?.length
+              ? `${last.tracks.length} ${pluralRu(last.tracks.length, "трек", "трека", "треков")}`
+              : "Ассистент"
+            : attachment
+              ? attachment.kind === "track"
+                ? `Трек: ${attachment.title}`
+                : `Плейлист: ${attachment.title}`
+              : track
+                ? `${track.title} — ${track.artist}`
+                : "Голосовой помощник";
 
   return (
     <div className="fixed left-1/2 top-[calc(8px+var(--inset-top,0px))] z-[60] w-fit max-w-[calc(100vw-24px)] -translate-x-1/2 animate-[island-in_.28s_cubic-bezier(.22,1,.36,1)] sm:max-w-[560px]">

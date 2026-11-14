@@ -30,6 +30,7 @@ type Props = {
   status: string;
   track: Track | null;
   attachment: AssistantAttachment | null;
+  available: boolean;
   onDetach: () => void;
   onInput: (value: string) => void;
   onSend: (value?: string) => void;
@@ -58,6 +59,7 @@ export default function AssistantPanel({
   status,
   track,
   attachment,
+  available,
   onDetach,
   onInput,
   onSend,
@@ -284,18 +286,20 @@ export default function AssistantPanel({
               />
             </div>
 
-            <button
-              onClick={onMic}
-              disabled={busy}
-              aria-label={listening ? "Остановить запись" : "Спросить голосом"}
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                listening
-                  ? "border-accent bg-accent text-accentText"
-                  : "border-line bg-surface text-ink hover:border-lineStrong"
-              }`}
-            >
-              {listening ? <MicOff size={18} /> : <Mic size={18} />}
-            </button>
+            {available && (
+              <button
+                onClick={onMic}
+                disabled={busy}
+                aria-label={listening ? "Остановить запись" : "Спросить голосом"}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  listening
+                    ? "border-accent bg-accent text-accentText"
+                    : "border-line bg-surface text-ink hover:border-lineStrong"
+                }`}
+              >
+                {listening ? <MicOff size={18} /> : <Mic size={18} />}
+              </button>
+            )}
 
             <button
               onClick={() => onSend()}

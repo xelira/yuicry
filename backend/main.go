@@ -91,6 +91,7 @@ func main() {
 	mux.HandleFunc("GET /api/wave", api.handleWave)
 	mux.HandleFunc("POST /api/assistant", api.handleAssistant)
 	mux.HandleFunc("GET /api/tts", api.handleTTS)
+	mux.HandleFunc("POST /api/transcribe", api.handleTranscribe)
 	mux.HandleFunc("GET /api/similar/{id}", api.handleSimilar)
 	mux.HandleFunc("GET /api/artist/{id}", api.handleArtist)
 	mux.HandleFunc("GET /api/album/{id}", api.handleCatalogAlbum)

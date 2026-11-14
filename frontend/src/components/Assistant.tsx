@@ -5,7 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import AssistantIsland from "@/components/assistant/AssistantIsland";
 import AssistantPanel from "@/components/assistant/AssistantPanel";
 import { askAssistant, type AssistantAction, type AssistantChatMessage } from "@/lib/assistant";
-import { listen, requestMicrophone, speak, stopSpeaking, type ListeningSession } from "@/lib/speech";
+import {
+  listen,
+  requestMicrophone,
+  speak,
+  speechSupported,
+  stopSpeaking,
+  type ListeningSession,
+} from "@/lib/speech";
 import { playWave } from "@/lib/wave";
 import { useAssistant } from "@/store/assistantStore";
 import { currentTrack, usePlayer, type Track } from "@/store/playerStore";
@@ -30,6 +37,7 @@ export default function Assistant() {
   const detach = useAssistant((state) => state.detach);
 
   const track = usePlayer(currentTrack);
+  const available = speechSupported();
 
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -41,6 +49,13 @@ export default function Assistant() {
     const saved = localStorage.getItem(voiceKey);
     if (saved !== null) setVoice(saved === "1");
   }, [setVoice]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    const timer = window.setTimeout(() => setError(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [error]);
 
   useEffect(() => {
     if (!open) return;
@@ -255,7 +270,7 @@ export default function Assistant() {
       setStatus("");
       setInput("");
 
-      if (text.trim()) await send(text);
+      if (text.trim() && useAssistant.getState().open) await send(text);
     } catch (failure) {
       session.current = null;
       setListening(false);
@@ -300,6 +315,7 @@ export default function Assistant() {
         last={last}
         track={track ?? null}
         attachment={attachment}
+        available={available}
         onMic={() => void toggleListen()}
         onExpand={() => setExpanded(true)}
         onHide={() => setOpen(false)}
@@ -318,6 +334,7 @@ export default function Assistant() {
       status={status}
       track={track ?? null}
       attachment={attachment}
+      available={available}
       onDetach={detach}
       onInput={setInput}
       onSend={(value) => void send(value)}
