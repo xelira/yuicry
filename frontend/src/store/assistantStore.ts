@@ -12,11 +12,13 @@ export type AssistantMessage = {
 
 type AssistantState = {
   open: boolean;
+  expanded: boolean;
   messages: AssistantMessage[];
   busy: boolean;
   listening: boolean;
   voice: boolean;
   setOpen: (open: boolean) => void;
+  setExpanded: (expanded: boolean) => void;
   setBusy: (busy: boolean) => void;
   setListening: (listening: boolean) => void;
   setVoice: (voice: boolean) => void;
@@ -31,12 +33,14 @@ function messageID() {
 
 export const useAssistant = create<AssistantState>((set) => ({
   open: false,
+  expanded: false,
   messages: [],
   busy: false,
   listening: false,
   voice: true,
 
-  setOpen: (open) => set({ open }),
+  setOpen: (open) => set(open ? { open } : { open, expanded: false }),
+  setExpanded: (expanded) => set({ expanded }),
   setBusy: (busy) => set({ busy }),
   setListening: (listening) => set({ listening }),
   setVoice: (voice) => set({ voice }),

@@ -145,6 +145,9 @@ test("ассистент отвечает и включает трек", async (
   });
 
   await page.getByRole("button", { name: "Ассистент" }).click();
+  await expect(page.getByRole("button", { name: "Развернуть ассистента" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Развернуть ассистента" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Ассистент" });
   await expect(dialog).toBeVisible();
@@ -156,4 +159,22 @@ test("ассистент отвечает и включает трек", async (
   await expect(page.getByText("Wave Track").first()).toBeVisible();
   await expect(dialog).toBeHidden({ timeout: 5000 });
   expect(question).toBe("включи трек");
+});
+
+test("ассистент открывается островком и разворачивается", async ({ page }) => {
+  await page.getByRole("button", { name: "Ассистент" }).click();
+
+  await expect(page.getByRole("button", { name: "Развернуть ассистента" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Ассистент" })).toHaveCount(0);
+
+  await page.getByText("Спроси про музыку").dblclick();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Свернуть ассистента" }).click();
+  await expect(page.getByRole("button", { name: "Развернуть ассистента" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Скрыть ассистента" }).click();
+  await expect(page.getByRole("button", { name: "Развернуть ассистента" })).toHaveCount(0);
 });

@@ -8,7 +8,7 @@ type NativeAssistant = {
   speak: (options: { text: string }) => Promise<void>;
   stopSpeaking: () => Promise<void>;
   addListener: (
-    event: "partial",
+    event: "partial" | "status",
     handler: (data: { text: string }) => void,
   ) => Promise<{ remove: () => Promise<void> }>;
 };
@@ -91,21 +91,32 @@ export async function requestMicrophone() {
   }
 }
 
-export function listen(onPartial: (text: string) => void): ListeningSession {
+export function listen(
+  onPartial: (text: string) => void,
+  onStatus?: (text: string) => void,
+): ListeningSession {
   if (nativeSpeech()) {
     let stopped = false;
-    let listener: { remove: () => Promise<void> } | null = null;
+    let partialListener: { remove: () => Promise<void> } | null = null;
+    let statusListener: { remove: () => Promise<void> } | null = null;
 
     const result = (async () => {
-      listener = await native.addListener("partial", (data) => {
+      partialListener = await native.addListener("partial", (data) => {
         if (!stopped) onPartial(data.text);
       });
+
+      if (onStatus) {
+        statusListener = await native.addListener("status", (data) => {
+          if (!stopped) onStatus(data.text);
+        });
+      }
 
       try {
         const value = await native.startListening();
         return value.text;
       } finally {
-        if (listener) await listener.remove();
+        if (partialListener) await partialListener.remove();
+        if (statusListener) await statusListener.remove();
       }
     })();
 

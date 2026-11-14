@@ -283,7 +283,11 @@ export default function Home() {
           <div className="flex-1" />
 
           <button
-            onClick={() => useAssistant.getState().setOpen(true)}
+            onClick={() => {
+              const assistant = useAssistant.getState();
+              assistant.setExpanded(false);
+              assistant.setOpen(true);
+            }}
             aria-label="Ассистент"
             className="flex h-9 items-center gap-2 rounded-full border border-line px-2.5 text-[12px] text-muted transition-colors hover:border-lineStrong hover:text-ink sm:px-3"
           >

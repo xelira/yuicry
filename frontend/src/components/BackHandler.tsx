@@ -17,6 +17,11 @@ export default function BackHandler() {
       const assistant = useAssistant.getState();
 
       if (assistant.open) {
+        if (assistant.expanded) {
+          assistant.setExpanded(false);
+          return;
+        }
+
         assistant.setOpen(false);
         return;
       }
