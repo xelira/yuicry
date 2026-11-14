@@ -32,6 +32,7 @@ public class AssistantPlugin extends Plugin {
     private PluginCall listeningCall;
     private TextToSpeech speech;
     private boolean speechReady;
+    private String pendingSpeech;
     private boolean listening;
 
     @Override
@@ -41,6 +42,12 @@ public class AssistantPlugin extends Plugin {
 
             applyLanguage();
             speechReady = true;
+
+            if (pendingSpeech != null) {
+                String value = pendingSpeech;
+                pendingSpeech = null;
+                speech.speak(value, TextToSpeech.QUEUE_FLUSH, null, "yuicry-" + System.nanoTime());
+            }
         });
     }
 
@@ -121,7 +128,8 @@ public class AssistantPlugin extends Plugin {
         }
 
         if (!speechReady) {
-            call.reject("Озвучка ещё не готова", "unavailable");
+            pendingSpeech = text;
+            call.resolve();
             return;
         }
 
@@ -135,6 +143,7 @@ public class AssistantPlugin extends Plugin {
 
     @PluginMethod
     public void stopSpeaking(PluginCall call) {
+        pendingSpeech = null;
         if (speech != null) speech.stop();
         call.resolve();
     }

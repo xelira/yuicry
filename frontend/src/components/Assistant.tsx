@@ -294,7 +294,11 @@ export default function Assistant() {
           </button>
         </header>
 
-        <div ref={scrollRef} className="custom-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+        <div
+          ref={scrollRef}
+          aria-live="polite"
+          className="custom-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5"
+        >
           {messages.length === 0 ? (
             <div className="flex flex-col items-center py-8 text-center">
               <span className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-ink">
