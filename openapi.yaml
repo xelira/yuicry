@@ -131,6 +131,24 @@ paths:
                       type: integer
                     likes:
                       type: integer
+                    last_tracks:
+                      type: array
+                      items:
+                        type: string
+                    attachment:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                          enum: [track, playlist]
+                        id:
+                          type: string
+                        title:
+                          type: string
+                        artist:
+                          type: string
+                        count:
+                          type: integer
       responses:
         "200":
           description: Ответ ассистента
@@ -143,11 +161,22 @@ paths:
                     type: string
                   action:
                     type: string
-                    enum: [none, play, pause, resume, next, previous, like, wave]
+                    enum: [none, play, pause, resume, next, previous, like, wave, play_likes, show_likes, play_index]
+                  index:
+                    type: integer
                   tracks:
                     type: array
                     items:
                       $ref: "#/components/schemas/Track"
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                        url:
+                          type: string
         "429":
           description: Слишком много запросов
 

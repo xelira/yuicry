@@ -1,12 +1,14 @@
 import { create } from "zustand";
 
 export type DragKind = "playlist" | "track";
+export type DragTarget = "none" | "delete" | "assistant";
 
 export type DragItem = {
   kind: DragKind;
   title: string;
   cover?: string;
   onDrop: () => void;
+  onAttach?: () => void;
 };
 
 type DragState = {
@@ -14,9 +16,10 @@ type DragState = {
   x: number;
   y: number;
   over: boolean;
+  target: DragTarget;
   consuming: boolean;
   begin: (item: DragItem, x: number, y: number) => void;
-  move: (x: number, y: number, over: boolean) => void;
+  move: (x: number, y: number, target: DragTarget) => void;
   finish: () => void;
   clear: () => void;
 };
@@ -28,21 +31,28 @@ export const useDrag = create<DragState>((set, get) => ({
   x: 0,
   y: 0,
   over: false,
+  target: "none",
   consuming: false,
 
   begin: (item, x, y) => {
     window.clearTimeout(timer);
-    set({ item, x, y, over: false, consuming: false });
+    set({ item, x, y, over: false, target: "none", consuming: false });
   },
 
-  move: (x, y, over) => set({ x, y, over }),
+  move: (x, y, target) => set({ x, y, target, over: target === "delete" }),
 
   finish: () => {
-    const { item, over } = get();
+    const { item, target } = get();
     if (!item) return;
 
-    if (!over) {
-      set({ item: null, over: false, consuming: false });
+    if (target === "assistant" && item.onAttach) {
+      set({ item: null, over: false, target: "none", consuming: false });
+      item.onAttach();
+      return;
+    }
+
+    if (target !== "delete") {
+      set({ item: null, over: false, target: "none", consuming: false });
       return;
     }
 
@@ -50,13 +60,13 @@ export const useDrag = create<DragState>((set, get) => ({
 
     timer = window.setTimeout(() => {
       const dropped = get().item;
-      set({ item: null, over: false, consuming: false });
+      set({ item: null, over: false, target: "none", consuming: false });
       dropped?.onDrop();
     }, 360);
   },
 
   clear: () => {
     window.clearTimeout(timer);
-    set({ item: null, over: false, consuming: false });
+    set({ item: null, over: false, target: "none", consuming: false });
   },
 }));

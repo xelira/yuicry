@@ -14,10 +14,12 @@ import {
   ThumbsDown,
 } from "lucide-react";
 
+import AssistantIcon from "@/components/AssistantIcon";
 import { SimilarIcon } from "@/components/icons";
 import { usePlayer, type Track } from "@/store/playerStore";
 import { coverSource } from "@/lib/audio";
 import { shareLink } from "@/lib/share";
+import { attachTrack } from "@/lib/attach";
 import { playWave } from "@/lib/wave";
 
 type Album = {
@@ -187,6 +189,17 @@ export default function TrackMenu({ track, liked, onSimilar, onDislike }: Props)
       >
         <AudioWaveform size={15} />
         Моя волна
+      </button>
+
+      <button
+        onClick={() => {
+          attachTrack(track);
+          setOpen(false);
+        }}
+        className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] text-ink transition-colors hover:bg-surface2"
+      >
+        <AssistantIcon size={15} />
+        Спросить у ассистента
       </button>
 
       {!liked && (

@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { useDrag, type DragKind } from "@/store/dragStore";
+import { useDrag, type DragKind, type DragTarget } from "@/store/dragStore";
 
 type Options = {
   kind: DragKind;
   title: string;
   cover?: string;
   onDrop: () => void;
+  onAttach?: () => void;
   disabled?: boolean;
 };
 
@@ -16,7 +17,14 @@ const holdDelay = 450;
 const moveTolerance = 8;
 const dropLine = 200;
 
-export function useLongPressDrag({ kind, title, cover, onDrop, disabled = false }: Options) {
+export function useLongPressDrag({
+  kind,
+  title,
+  cover,
+  onDrop,
+  onAttach,
+  disabled = false,
+}: Options) {
   const timer = useRef<number | null>(null);
   const origin = useRef({ x: 0, y: 0 });
   const active = useRef(false);
@@ -59,7 +67,7 @@ export function useLongPressDrag({ kind, title, cover, onDrop, disabled = false 
         active.current = true;
         blocked.current = true;
         setPressed(true);
-        useDrag.getState().begin({ kind, title, cover, onDrop }, startX, startY);
+        useDrag.getState().begin({ kind, title, cover, onDrop, onAttach }, startX, startY);
 
         try {
           element.setPointerCapture(event.pointerId);
@@ -86,8 +94,15 @@ export function useLongPressDrag({ kind, title, cover, onDrop, disabled = false 
 
       event.preventDefault();
 
-      const over = event.clientY < dropLine;
-      useDrag.getState().move(event.clientX, event.clientY, over);
+      const item = useDrag.getState().item;
+      const overAssistant = Boolean(item?.onAttach) && event.clientY > window.innerHeight * 0.62;
+      const target: DragTarget = overAssistant
+        ? "assistant"
+        : event.clientY < dropLine
+          ? "delete"
+          : "none";
+
+      useDrag.getState().move(event.clientX, event.clientY, target);
     },
 
     onPointerUp: () => {

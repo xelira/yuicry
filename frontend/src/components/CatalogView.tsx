@@ -5,6 +5,7 @@ import { ArrowLeft, Play } from "lucide-react";
 
 import LikeButton from "@/components/LikeButton";
 import { CardSkeleton, Skeleton, TrackSkeleton } from "@/components/Skeleton";
+import { attachTrack } from "@/lib/attach";
 import { coverSource } from "@/lib/audio";
 import { useLongPressDrag } from "@/lib/useLongPressDrag";
 import { useNav } from "@/store/navStore";
@@ -166,6 +167,7 @@ function CatalogTrackRow({
       void hideTrack(track);
       setRemoved(true);
     },
+    onAttach: () => attachTrack(track),
   });
 
   if (removed) return null;

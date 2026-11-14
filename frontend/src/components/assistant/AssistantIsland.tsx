@@ -4,6 +4,7 @@ import { Maximize2, Mic, MicOff, X } from "lucide-react";
 
 import AssistantIcon from "@/components/AssistantIcon";
 import { coverSource } from "@/lib/audio";
+import type { AssistantAttachment } from "@/lib/assistant";
 import type { AssistantMessage } from "@/store/assistantStore";
 import type { Track } from "@/store/playerStore";
 
@@ -14,6 +15,7 @@ type Props = {
   error: string;
   last: AssistantMessage | null;
   track: Track | null;
+  attachment: AssistantAttachment | null;
   onMic: () => void;
   onExpand: () => void;
   onHide: () => void;
@@ -26,6 +28,7 @@ export default function AssistantIsland({
   error,
   last,
   track,
+  attachment,
   onMic,
   onExpand,
   onHide,
@@ -48,9 +51,13 @@ export default function AssistantIsland({
         ? last.tracks?.length
           ? `${last.tracks.length} треков`
           : "Ассистент"
-        : track
-          ? `${track.title} — ${track.artist}`
-          : "Голосовой помощник";
+        : attachment
+          ? attachment.kind === "track"
+            ? `Трек: ${attachment.title}`
+            : `Плейлист: ${attachment.title}`
+          : track
+            ? `${track.title} — ${track.artist}`
+            : "Голосовой помощник";
 
   return (
     <div className="fixed left-1/2 top-[calc(8px+var(--inset-top,0px))] z-[60] w-fit max-w-[calc(100vw-24px)] -translate-x-1/2 animate-[island-in_.28s_cubic-bezier(.22,1,.36,1)] sm:max-w-[560px]">

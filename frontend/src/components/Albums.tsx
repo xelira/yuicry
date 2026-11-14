@@ -19,6 +19,7 @@ import { CardSkeleton } from "@/components/Skeleton";
 import { coverSource } from "@/lib/audio";
 import { pluralRu } from "@/lib/plural";
 import { shareLink } from "@/lib/share";
+import { attachPlaylist, attachTrack } from "@/lib/attach";
 import { useLongPressDrag } from "@/lib/useLongPressDrag";
 import { useNav } from "@/store/navStore";
 import { usePlayer, type Track } from "@/store/playerStore";
@@ -129,6 +130,7 @@ function PlaylistCard({
     title: album.title,
     cover: album.cover,
     onDrop: onDelete,
+    onAttach: () => attachPlaylist(album),
   });
 
   return (
@@ -200,6 +202,7 @@ function PlaylistRow({
     title: track.title,
     cover: track.cover_big,
     onDrop: onRemove,
+    onAttach: () => attachTrack(track),
   });
 
   return (

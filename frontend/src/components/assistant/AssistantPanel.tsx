@@ -14,6 +14,8 @@ import {
 
 import AssistantIcon from "@/components/AssistantIcon";
 import AssistantMessageView from "@/components/assistant/AssistantMessageView";
+import { coverSource } from "@/lib/audio";
+import type { AssistantAttachment } from "@/lib/assistant";
 import type { AssistantMessage } from "@/store/assistantStore";
 import type { Track } from "@/store/playerStore";
 
@@ -26,6 +28,8 @@ type Props = {
   error: string;
   status: string;
   track: Track | null;
+  attachment: AssistantAttachment | null;
+  onDetach: () => void;
   onInput: (value: string) => void;
   onSend: (value?: string) => void;
   onMic: () => void;
@@ -38,9 +42,9 @@ type Props = {
 
 const suggestions = [
   "Что послушать под настроение?",
+  "Мои избранные",
   "Включи мою волну",
   "Посоветуй похожее",
-  "Поставь на паузу",
 ];
 
 export default function AssistantPanel({
@@ -52,6 +56,8 @@ export default function AssistantPanel({
   error,
   status,
   track,
+  attachment,
+  onDetach,
   onInput,
   onSend,
   onMic,
@@ -73,7 +79,7 @@ export default function AssistantPanel({
     if (!box) return;
 
     box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
-  }, [messages.length, busy]);
+  }, [messages.length, busy, attachment]);
 
   return (
     <div
@@ -149,7 +155,9 @@ export default function AssistantPanel({
               </span>
               <h2 className="mt-4 text-[20px] font-semibold tracking-tight text-ink">Чем помочь?</h2>
               <p className="mt-1.5 max-w-[280px] text-[12px] leading-relaxed text-muted">
-                Спрошу про треки и исполнителей, включу музыку или расскажу, что сейчас играет.
+                {attachment
+                  ? "Спроси про прикреплённое: что это, на что похоже, что послушать рядом."
+                  : "Спрошу про треки и исполнителей, включу музыку или расскажу, что сейчас играет."}
               </p>
 
               {track && (
@@ -159,7 +167,14 @@ export default function AssistantPanel({
               )}
 
               <div className="mt-5 flex w-full flex-wrap justify-center gap-1.5">
-                {suggestions.map((item) => (
+                {[
+                  ...(attachment?.kind === "track"
+                    ? ["Что это за трек?", "Похожее"]
+                    : attachment?.kind === "playlist"
+                      ? ["Что за плейлист?", "Похожее"]
+                      : []),
+                  ...suggestions,
+                ].map((item) => (
                   <button
                     key={item}
                     onClick={() => onSend(item)}
@@ -198,6 +213,39 @@ export default function AssistantPanel({
         </div>
 
         <div className="shrink-0 border-t border-line bg-bg px-3 pb-[calc(12px+var(--inset-bottom,0px))] pt-3">
+          {attachment && (
+            <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-surface p-1.5">
+              {attachment.cover ? (
+                <img
+                  src={coverSource(attachment.cover, "small")}
+                  alt=""
+                  className="h-8 w-8 shrink-0 rounded-md border border-line object-cover"
+                />
+              ) : (
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-surface2 text-muted">
+                  <AssistantIcon size={15} />
+                </span>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] font-medium text-ink">{attachment.title}</p>
+                <p className="truncate text-[10px] text-muted">
+                  {attachment.kind === "track"
+                    ? attachment.artist
+                    : `${attachment.count ?? 0} треков`}
+                </p>
+              </div>
+
+              <button
+                onClick={onDetach}
+                aria-label="Убрать вложение"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {listening && (
             <div className="mb-2 flex items-center justify-center gap-2 text-[11px] text-muted">
               <span className="flex h-3.5 items-end gap-[3px]" aria-hidden="true">
@@ -229,7 +277,7 @@ export default function AssistantPanel({
                   event.preventDefault();
                   onSend();
                 }}
-                placeholder="Спроси про музыку…"
+                placeholder={attachment ? "Спроси про вложение…" : "Спроси про музыку…"}
                 aria-label="Вопрос ассистенту"
                 className="h-10 w-full bg-transparent text-[13px] text-ink placeholder:text-muted focus:outline-none"
               />

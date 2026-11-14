@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Disc3, Trash2 } from "lucide-react";
 
+import AssistantIcon from "@/components/AssistantIcon";
 import { coverSource } from "@/lib/audio";
 import { useDrag } from "@/store/dragStore";
 
@@ -10,8 +11,10 @@ export default function DragOverlay() {
   const item = useDrag((state) => state.item);
   const x = useDrag((state) => state.x);
   const y = useDrag((state) => state.y);
-  const over = useDrag((state) => state.over);
+  const target = useDrag((state) => state.target);
   const consuming = useDrag((state) => state.consuming);
+  const over = target === "delete";
+  const overAssistant = target === "assistant";
 
   useEffect(() => {
     if (!item) return;
@@ -86,8 +89,25 @@ export default function DragOverlay() {
         )}
 
         <span className={`text-[11px] ${hole ? "text-white/60" : "text-muted"}`}>
-          {over ? "Отпусти" : hole ? "Удали трек" : "Отпусти над корзиной"}
+          {overAssistant
+            ? "Отпусти, чтобы спросить ИИ"
+            : over
+              ? "Отпусти"
+              : hole
+                ? "Вверх — удалить · вниз — спросить ИИ"
+                : "Вверх — удалить · вниз — спросить ИИ"}
         </span>
+      </div>
+
+      <div
+        className={`absolute bottom-[calc(22px+var(--inset-bottom,0px))] left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2.5 text-[11px] font-medium shadow-2xl backdrop-blur-xl transition-all duration-300 ${
+          overAssistant
+            ? "scale-105 border-accent bg-accent/15 text-accent"
+            : "border-line bg-surface/90 text-muted"
+        }`}
+      >
+        <AssistantIcon size={18} />
+        Спросить у ИИ
       </div>
 
       <div
@@ -96,7 +116,7 @@ export default function DragOverlay() {
           transform: consuming
             ? `translate3d(calc(50vw - 110px), calc(18px + var(--inset-top,0px) - 24px), 0) scale(0.06) rotate(24deg)`
             : `translate3d(${x - 110}px, ${y - 40}px, 0) rotate(-2deg) scale(1.03)`,
-          opacity: consuming || over ? 0 : 1,
+          opacity: consuming || over ? 0 : overAssistant ? 0.45 : 1,
           transition: consuming
             ? "transform .34s cubic-bezier(.4,0,.2,1), opacity .34s ease"
             : over

@@ -8,6 +8,7 @@ import Equalizer from "@/components/Equalizer";
 import { Skeleton, TrackSkeleton } from "@/components/Skeleton";
 import { coverSource } from "@/lib/audio";
 import { pluralRu } from "@/lib/plural";
+import { attachTrack } from "@/lib/attach";
 import { useLongPressDrag } from "@/lib/useLongPressDrag";
 import { useNav } from "@/store/navStore";
 import { usePlayer, type Track } from "@/store/playerStore";
@@ -50,6 +51,7 @@ function LikedRow({ track, tracks, index }: { track: Track; tracks: Track[]; ind
     title: track.title,
     cover: track.cover_big,
     onDrop: () => void toggleLike(track),
+    onAttach: () => attachTrack(track),
   });
 
   const active = current?.id === track.id;

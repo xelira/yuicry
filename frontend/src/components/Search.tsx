@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Heart, Loader2, Play, Search as SearchIcon, X } from "lucide-react";
 
 import AddToAlbum from "@/components/AddToAlbum";
+import AssistantIcon from "@/components/AssistantIcon";
 import EmptyState from "@/components/EmptyState";
 import { TrackSkeleton } from "@/components/Skeleton";
 import Equalizer from "@/components/Equalizer";
 import { useNav } from "@/store/navStore";
 import { usePlayer, type Track } from "@/store/playerStore";
+import { attachTrack } from "@/lib/attach";
 import { coverSource } from "@/lib/audio";
 
 function formatDuration(seconds: number) {
@@ -220,6 +222,14 @@ export default function Search() {
                     </span>
 
                     <AddToAlbum track={track} />
+
+                    <button
+                      onClick={() => attachTrack(track)}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink"
+                      aria-label="Спросить у ассистента"
+                    >
+                      <AssistantIcon size={15} />
+                    </button>
 
                     <button
                       onClick={() => void toggleLike(track)}

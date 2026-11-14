@@ -41,6 +41,9 @@ async function mockApi(page: Page) {
     route.fulfill({ status: 200, contentType: "audio/mpeg", body: Buffer.alloc(2048) }),
   );
   await page.route("**/api/download/**", (route) => route.fulfill({ status: 202, json: {} }));
+  await page.route("**/api/tts?*", (route) =>
+    route.fulfill({ status: 200, contentType: "audio/mpeg", body: Buffer.alloc(128) }),
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -209,4 +212,54 @@ test("ассистент показывает треки и озвучивает
   await expect(dialog.getByRole("button", { name: "Слушать все" })).toBeVisible();
 
   expect(tts).toContain("/api/tts");
+});
+
+test("трек можно перетащить в ассистента", async ({ page }) => {
+  await page.route("**/api/likes", (route) =>
+    route.fulfill({ json: { tracks: [waveTrack] } }),
+  );
+
+  await page.reload();
+  await page.getByRole("button", { name: "Избранное" }).click();
+
+  const row = page.locator('[data-tab="likes"] li').first();
+  await expect(row).toBeVisible();
+
+  const box = await row.boundingBox();
+  expect(box).not.toBeNull();
+
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.move(box!.x + box!.width / 2, 500, { steps: 6 });
+  await page.mouse.move(640, 680, { steps: 6 });
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Wave Track")).toBeVisible();
+  await expect(dialog.getByText("Wave Artist")).toBeVisible();
+});
+
+test("ассистент показывает избранные", async ({ page }) => {
+  await page.route("**/api/assistant", (route) =>
+    route.fulfill({
+      json: {
+        reply: "Вот твои избранные: Wave Track.",
+        action: "show_likes",
+        index: 0,
+        tracks: [waveTrack, searchTrack],
+      },
+    }),
+  );
+
+  await page.getByRole("button", { name: "Ассистент" }).click();
+  await page.getByRole("button", { name: "Развернуть ассистента" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await dialog.getByRole("button", { name: "Мои избранные" }).click();
+
+  await expect(dialog.getByText("Из каталога · 2")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Слушать все" })).toBeVisible();
 });

@@ -26,6 +26,8 @@ export default function Assistant() {
   const setVoice = useAssistant((state) => state.setVoice);
   const addMessage = useAssistant((state) => state.addMessage);
   const clear = useAssistant((state) => state.clear);
+  const attachment = useAssistant((state) => state.attachment);
+  const detach = useAssistant((state) => state.detach);
 
   const track = usePlayer(currentTrack);
 
@@ -72,6 +74,10 @@ export default function Assistant() {
   const context = () => {
     const player = usePlayer.getState();
     const current = player.queue[player.index];
+    const state = useAssistant.getState();
+    const lastWithTracks = [...state.messages]
+      .reverse()
+      .find((message) => message.role === "assistant" && message.tracks?.length);
 
     return {
       track: current?.title ?? "",
@@ -79,15 +85,53 @@ export default function Assistant() {
       playing: player.playing,
       queue: player.queue.length,
       likes: player.liked.length,
+      last_tracks:
+        lastWithTracks?.tracks?.map((item) => `${item.title} — ${item.artist}`) ?? [],
+      attachment: state.attachment
+        ? {
+            kind: state.attachment.kind,
+            id: state.attachment.id,
+            title: state.attachment.title,
+            artist: state.attachment.artist,
+            count: state.attachment.count,
+          }
+        : null,
     };
   };
 
-  const applyAction = (action: AssistantAction, tracks: Track[]) => {
+  const applyAction = (action: AssistantAction, tracks: Track[], index = 0) => {
     const player = usePlayer.getState();
 
     if (action === "play" && tracks.length > 0) {
       player.playQueue(tracks);
       setExpanded(false);
+      return;
+    }
+
+    if (action === "play_likes" && tracks.length > 0) {
+      player.playQueue(tracks);
+      setExpanded(false);
+      return;
+    }
+
+    if (action === "show_likes" && tracks.length > 0) {
+      setExpanded(true);
+      return;
+    }
+
+    if (action === "play_index") {
+      const state = useAssistant.getState();
+      const lastWithTracks = [...state.messages]
+        .reverse()
+        .find((message) => message.role === "assistant" && message.tracks?.length);
+      const source = lastWithTracks?.tracks ?? player.queue;
+      const position = index - 1;
+
+      if (position >= 0 && position < source.length) {
+        player.playQueue(source, position);
+        setExpanded(false);
+      }
+
       return;
     }
 
@@ -143,10 +187,21 @@ export default function Assistant() {
         .map((message) => ({ role: message.role, content: message.text }));
 
       const answer = await askAssistant(history, context());
-      addMessage({ role: "assistant", text: answer.reply, tracks: answer.tracks });
-      applyAction(answer.action, answer.tracks);
+      addMessage({
+        role: "assistant",
+        text: answer.reply,
+        tracks: answer.tracks,
+        sources: answer.sources,
+      });
+      applyAction(answer.action, answer.tracks, answer.index);
 
-      if (useAssistant.getState().voice && answer.action !== "play" && answer.action !== "wave") {
+      if (
+        useAssistant.getState().voice &&
+        answer.action !== "play" &&
+        answer.action !== "wave" &&
+        answer.action !== "play_likes" &&
+        answer.action !== "play_index"
+      ) {
         void speak(answer.reply);
       }
     } catch (failure) {
@@ -244,6 +299,7 @@ export default function Assistant() {
         error={error}
         last={last}
         track={track ?? null}
+        attachment={attachment}
         onMic={() => void toggleListen()}
         onExpand={() => setExpanded(true)}
         onHide={() => setOpen(false)}
@@ -261,6 +317,8 @@ export default function Assistant() {
       error={error}
       status={status}
       track={track ?? null}
+      attachment={attachment}
+      onDetach={detach}
       onInput={setInput}
       onSend={(value) => void send(value)}
       onMic={() => void toggleListen()}

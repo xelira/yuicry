@@ -38,6 +38,22 @@ export default function AssistantMessageView({ message, onPlay }: Props) {
           {message.text}
         </p>
 
+        {message.sources && message.sources.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {message.sources.slice(0, 2).map((source) => (
+              <a
+                key={source.url}
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="max-w-full truncate rounded-full border border-line px-2 py-1 text-[10px] text-muted transition-colors hover:border-lineStrong hover:text-ink"
+              >
+                {source.title}
+              </a>
+            ))}
+          </div>
+        )}
+
         {message.tracks && message.tracks.length > 0 && (
           <div className="mt-3">
             <div className="mb-2 flex items-center justify-between gap-2">

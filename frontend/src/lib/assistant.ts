@@ -8,7 +8,24 @@ export type AssistantAction =
   | "next"
   | "previous"
   | "like"
-  | "wave";
+  | "wave"
+  | "play_likes"
+  | "show_likes"
+  | "play_index";
+
+export type AssistantSource = {
+  title: string;
+  url: string;
+};
+
+export type AssistantAttachment = {
+  kind: "track" | "playlist";
+  id: string;
+  title: string;
+  artist?: string;
+  count?: number;
+  cover?: string;
+};
 
 export type AssistantChatMessage = {
   role: "user" | "assistant";
@@ -21,12 +38,16 @@ export type AssistantContext = {
   playing: boolean;
   queue: number;
   likes: number;
+  last_tracks: string[];
+  attachment: AssistantAttachment | null;
 };
 
 export type AssistantAnswer = {
   reply: string;
   action: AssistantAction;
+  index: number;
   tracks: Track[];
+  sources: AssistantSource[];
 };
 
 const actions: AssistantAction[] = [
@@ -38,6 +59,9 @@ const actions: AssistantAction[] = [
   "previous",
   "like",
   "wave",
+  "play_likes",
+  "show_likes",
+  "play_index",
 ];
 
 export async function askAssistant(
@@ -56,9 +80,15 @@ export async function askAssistant(
   const data = await response.json();
   const action = actions.includes(data.action) ? (data.action as AssistantAction) : "none";
 
+  const sources = Array.isArray(data.sources)
+    ? (data.sources as AssistantSource[]).filter((item) => item?.title && item?.url)
+    : [];
+
   return {
     reply: String(data.reply ?? ""),
     action,
+    index: Number(data.index) || 0,
     tracks: Array.isArray(data.tracks) ? (data.tracks as Track[]) : [],
+    sources,
   };
 }
