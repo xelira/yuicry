@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         EdgeToEdge.enable(this);
         registerPlugin(PlaybackPlugin.class);
         registerPlugin(HostPlugin.class);
+        registerPlugin(AssistantPlugin.class);
         super.onCreate(savedInstanceState);
 
         WebView webView = getBridge().getWebView();

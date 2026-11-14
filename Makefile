@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 HOST ?= finland
-VERSION ?= 1.4.0
+VERSION ?= 1.5.0
 REMOTE ?= /root/yuicry
 PUBLIC ?= /var/www/yuicry
 

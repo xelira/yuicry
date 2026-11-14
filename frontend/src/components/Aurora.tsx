@@ -129,6 +129,10 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
   return shader;
 }
 
+type Scene = {
+  dispose: () => void;
+};
+
 export default function Aurora({ colors, light = false }: Props) {
   const holderRef = useRef<HTMLDivElement>(null);
   const targets = useRef(colors.map(rgb));
@@ -146,147 +150,234 @@ export default function Aurora({ colors, light = false }: Props) {
     const holder = holderRef.current;
     if (!holder) return;
 
-    const canvas = document.createElement("canvas");
-    canvas.style.width = "100%";
-    canvas.style.height = "100%";
-    canvas.style.display = "block";
-    holder.appendChild(canvas);
+    let disposed = false;
+    let scene: Scene | null = null;
+    let rebuiltAt = 0;
 
-    const gl = canvas.getContext("webgl", { antialias: false, alpha: false });
-    if (!gl) return;
+    const build = () => {
+      if (disposed) return;
 
-    const vertex = compile(gl, gl.VERTEX_SHADER, vertexShader);
-    const fragment = compile(gl, gl.FRAGMENT_SHADER, fragmentShader);
+      scene?.dispose();
+      scene = null;
 
-    if (!vertex || !fragment) return;
+      const canvas = document.createElement("canvas");
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.display = "block";
 
-    const program = gl.createProgram();
-    if (!program) return;
+      const gl = canvas.getContext("webgl", { antialias: false, alpha: false });
+      if (!gl) return;
 
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, fragment);
-    gl.linkProgram(program);
+      const vertex = compile(gl, gl.VERTEX_SHADER, vertexShader);
+      const fragment = compile(gl, gl.FRAGMENT_SHADER, fragmentShader);
 
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      return;
-    }
+      if (!vertex || !fragment) return;
 
-    gl.useProgram(program);
+      const program = gl.createProgram();
+      if (!program) return;
 
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-      gl.STATIC_DRAW,
-    );
+      gl.attachShader(program, vertex);
+      gl.attachShader(program, fragment);
+      gl.linkProgram(program);
 
-    const position = gl.getAttribLocation(program, "aPosition");
-    gl.enableVertexAttribArray(position);
-    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
 
-    const uniform = (name: string) => gl.getUniformLocation(program, name);
-    const time = uniform("uTime");
-    const bass = uniform("uBass");
-    const mid = uniform("uMid");
-    const treble = uniform("uTreble");
-    const energy = uniform("uEnergy");
-    const progress = uniform("uProgress");
-    const lightUniform = uniform("uLight");
-    const resolution = uniform("uResolution");
-    const colorA = uniform("uColorA");
-    const colorB = uniform("uColorB");
-    const colorC = uniform("uColorC");
+      gl.useProgram(program);
+      holder.appendChild(canvas);
 
-    const current = targets.current.map((color) => [...color]);
-    let lightMix = light ? 1 : 0;
-    let frame = 0;
-    const started = performance.now();
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+        gl.STATIC_DRAW,
+      );
 
-    const resize = () => {
-      const width = holder.clientWidth;
-      const height = holder.clientHeight;
-      if (width === 0 || height === 0) return;
+      const position = gl.getAttribLocation(program, "aPosition");
+      gl.enableVertexAttribArray(position);
+      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      const bufferWidth = Math.round(width * ratio);
-      const bufferHeight = Math.round(height * ratio);
+      const uniform = (name: string) => gl.getUniformLocation(program, name);
+      const time = uniform("uTime");
+      const bass = uniform("uBass");
+      const mid = uniform("uMid");
+      const treble = uniform("uTreble");
+      const energy = uniform("uEnergy");
+      const progress = uniform("uProgress");
+      const lightUniform = uniform("uLight");
+      const resolution = uniform("uResolution");
+      const colorA = uniform("uColorA");
+      const colorB = uniform("uColorB");
+      const colorC = uniform("uColorC");
 
-      if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
-        canvas.width = bufferWidth;
-        canvas.height = bufferHeight;
-      }
+      const current = targets.current.map((color) => [...color]);
+      let lightMix = light ? 1 : 0;
+      let frame = 0;
+      let running = false;
+      let lost = false;
+      let visible = !document.hidden;
+      const started = performance.now();
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      gl.viewport(0, 0, bufferWidth, bufferHeight);
-      gl.uniform2f(resolution, bufferWidth, bufferHeight);
-    };
+      const resize = () => {
+        if (lost || gl.isContextLost()) return;
 
-    const observer = new ResizeObserver(resize);
-    observer.observe(holder);
-    window.addEventListener("resize", resize);
-    window.addEventListener("orientationchange", resize);
-    window.visualViewport?.addEventListener("resize", resize);
-    resize();
+        const width = holder.clientWidth;
+        const height = holder.clientHeight;
+        if (width === 0 || height === 0) return;
 
-    const draw = () => {
-      const sound = levels();
-      const audio = audioElement();
-      const position = audio.duration ? Math.min(audio.currentTime / audio.duration, 1) : 0;
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        const bufferWidth = Math.round(width * ratio);
+        const bufferHeight = Math.round(height * ratio);
 
-      for (let index = 0; index < 3; index += 1) {
-        const target = targets.current[index];
-        for (let channel = 0; channel < 3; channel += 1) {
-          current[index][channel] += (target[channel] - current[index][channel]) * 0.03;
+        if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
+          canvas.width = bufferWidth;
+          canvas.height = bufferHeight;
         }
-      }
 
-      lightMix += (lightTarget.current - lightMix) * 0.06;
+        gl.viewport(0, 0, bufferWidth, bufferHeight);
+        gl.uniform2f(resolution, bufferWidth, bufferHeight);
+      };
 
-      const mix = (color: number[]) =>
-        color.map((value) => value + (1 - value) * 0.24 * lightMix);
+      const draw = () => {
+        if (lost || gl.isContextLost()) return;
 
-      const first = mix(current[0]);
-      const second = mix(current[1]);
-      const third = mix(current[2]);
+        const sound = levels();
+        const audio = audioElement();
+        const position = audio.duration ? Math.min(audio.currentTime / audio.duration, 1) : 0;
 
-      gl.uniform3f(colorA, first[0], first[1], first[2]);
-      gl.uniform3f(colorB, second[0], second[1], second[2]);
-      gl.uniform3f(colorC, third[0], third[1], third[2]);
+        for (let index = 0; index < 3; index += 1) {
+          const target = targets.current[index];
+          for (let channel = 0; channel < 3; channel += 1) {
+            current[index][channel] += (target[channel] - current[index][channel]) * 0.03;
+          }
+        }
 
-      gl.uniform1f(time, (performance.now() - started) / 1000);
-      gl.uniform1f(bass, sound.bass);
-      gl.uniform1f(mid, sound.mid);
-      gl.uniform1f(treble, sound.treble);
-      gl.uniform1f(energy, sound.energy);
-      gl.uniform1f(progress, position);
-      gl.uniform1f(lightUniform, lightMix);
+        lightMix += (lightTarget.current - lightMix) * 0.06;
 
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const mix = (color: number[]) =>
+          color.map((value) => value + (1 - value) * 0.24 * lightMix);
+
+        const first = mix(current[0]);
+        const second = mix(current[1]);
+        const third = mix(current[2]);
+
+        gl.uniform3f(colorA, first[0], first[1], first[2]);
+        gl.uniform3f(colorB, second[0], second[1], second[2]);
+        gl.uniform3f(colorC, third[0], third[1], third[2]);
+
+        gl.uniform1f(time, (performance.now() - started) / 1000);
+        gl.uniform1f(bass, sound.bass);
+        gl.uniform1f(mid, sound.mid);
+        gl.uniform1f(treble, sound.treble);
+        gl.uniform1f(energy, sound.energy);
+        gl.uniform1f(progress, position);
+        gl.uniform1f(lightUniform, lightMix);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      };
+
+      const loop = () => {
+        if (!running || lost || !visible || disposed) return;
+        draw();
+        frame = requestAnimationFrame(loop);
+      };
+
+      const stop = () => {
+        running = false;
+        cancelAnimationFrame(frame);
+      };
+
+      const start = () => {
+        if (lost || disposed) return;
+
+        resize();
+
+        if (reduced) {
+          draw();
+          return;
+        }
+
+        if (running) return;
+        running = true;
+        frame = requestAnimationFrame(loop);
+      };
+
+      const onLost = (event: Event) => {
+        event.preventDefault();
+        lost = true;
+        stop();
+
+        const now = Date.now();
+        if (now - rebuiltAt < 1500) return;
+
+        rebuiltAt = now;
+        window.setTimeout(() => {
+          if (!disposed && !document.hidden) build();
+        }, 350);
+      };
+
+      const onRestored = () => {
+        if (disposed) return;
+        lost = false;
+        start();
+      };
+
+      const onVisibility = () => {
+        visible = !document.hidden;
+
+        if (!visible) {
+          stop();
+          return;
+        }
+
+        if (lost || gl.isContextLost()) {
+          build();
+          return;
+        }
+
+        start();
+      };
+
+      const observer = new ResizeObserver(resize);
+      observer.observe(holder);
+      canvas.addEventListener("webglcontextlost", onLost, false);
+      canvas.addEventListener("webglcontextrestored", onRestored, false);
+      window.addEventListener("resize", resize);
+      window.addEventListener("orientationchange", resize);
+      window.addEventListener("pageshow", onVisibility);
+      window.addEventListener("focus", onVisibility);
+      window.visualViewport?.addEventListener("resize", resize);
+      document.addEventListener("visibilitychange", onVisibility);
+      resize();
+      start();
+
+      scene = {
+        dispose: () => {
+          stop();
+          observer.disconnect();
+          canvas.removeEventListener("webglcontextlost", onLost);
+          canvas.removeEventListener("webglcontextrestored", onRestored);
+          window.removeEventListener("resize", resize);
+          window.removeEventListener("orientationchange", resize);
+          window.removeEventListener("pageshow", onVisibility);
+          window.removeEventListener("focus", onVisibility);
+          window.visualViewport?.removeEventListener("resize", resize);
+          document.removeEventListener("visibilitychange", onVisibility);
+          gl.deleteBuffer(buffer);
+          gl.deleteProgram(program);
+          gl.deleteShader(vertex);
+          gl.deleteShader(fragment);
+          canvas.remove();
+        },
+      };
     };
 
-    const loop = () => {
-      draw();
-      frame = requestAnimationFrame(loop);
-    };
-
-    if (reduced) {
-      draw();
-    } else {
-      loop();
-    }
+    build();
 
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("orientationchange", resize);
-      window.visualViewport?.removeEventListener("resize", resize);
-      gl.deleteBuffer(buffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertex);
-      gl.deleteShader(fragment);
-      canvas.remove();
+      disposed = true;
+      scene?.dispose();
     };
   }, []);
 

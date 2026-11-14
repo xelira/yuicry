@@ -82,33 +82,51 @@ export function useBackgroundCanvas(draw: BackgroundDraw) {
       if (!reduced) frame = requestAnimationFrame(render);
     };
 
-    const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
-    window.addEventListener("resize", resize);
-    window.visualViewport?.addEventListener("resize", resize);
-    resize();
-    frame = requestAnimationFrame(render);
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(frame);
+    };
 
-    const onVisibility = () => {
-      if (document.hidden) {
-        running = false;
-        cancelAnimationFrame(frame);
+    const start = () => {
+      resize();
+
+      if (reduced) {
+        drawRef.current(ctx, width, height, (performance.now() - started) / 1000);
         return;
       }
 
-      if (!reduced) {
-        running = true;
-        frame = requestAnimationFrame(render);
+      if (running) return;
+      running = true;
+      frame = requestAnimationFrame(render);
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    window.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", resize);
+    window.addEventListener("pageshow", start);
+    window.addEventListener("focus", start);
+    window.visualViewport?.addEventListener("resize", resize);
+    start();
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+        return;
       }
+
+      start();
     };
 
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      running = false;
-      cancelAnimationFrame(frame);
+      stop();
       observer.disconnect();
       window.removeEventListener("resize", resize);
+      window.removeEventListener("orientationchange", resize);
+      window.removeEventListener("pageshow", start);
+      window.removeEventListener("focus", start);
       window.visualViewport?.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", onVisibility);
     };

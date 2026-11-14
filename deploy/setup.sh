@@ -64,6 +64,10 @@ SESSION_SECRET=$secret
 COOKIE_SECURE=1
 EOF
 
+  if [ -n "${NVIDIA_API_KEY:-}" ]; then
+    printf 'NVIDIA_API_KEY=%s\n' "$NVIDIA_API_KEY" >> /etc/yuicry/api.env
+  fi
+
   chmod 600 /etc/yuicry/api.env
 }
 

@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "yuicry",
   webDir: "out",
   backgroundColor: "#0b0b0d",
-  appendUserAgent: "yuicry/1.4.0",
+  appendUserAgent: "yuicry/1.5.0",
   server: {
     url: "https://yuicry.owaw.online/login/",
     cleartext: false,

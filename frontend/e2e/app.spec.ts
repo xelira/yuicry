@@ -135,3 +135,25 @@ test("Escape из текста возвращает на обложку", async 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Собрать волну" })).toBeVisible();
 });
+
+test("ассистент отвечает и включает трек", async ({ page }) => {
+  let question = "";
+
+  await page.route("**/api/assistant", (route) => {
+    question = route.request().postDataJSON().messages.at(-1).content;
+    return route.fulfill({ json: { reply: "Включаю", action: "play", tracks: [waveTrack] } });
+  });
+
+  await page.getByRole("button", { name: "Ассистент" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByLabel("Вопрос ассистенту").fill("включи трек");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+
+  await expect(page.getByText("Включаю")).toBeVisible();
+  await expect(page.getByText("Wave Track").first()).toBeVisible();
+  await expect(dialog).toBeHidden({ timeout: 5000 });
+  expect(question).toBe("включи трек");
+});

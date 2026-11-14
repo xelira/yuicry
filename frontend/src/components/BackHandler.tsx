@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 
+import { useAssistant } from "@/store/assistantStore";
 import { useNav } from "@/store/navStore";
 import { usePlayer } from "@/store/playerStore";
 import { useSettings } from "@/store/settingsStore";
@@ -13,6 +14,13 @@ export default function BackHandler() {
     if (!Capacitor.isNativePlatform()) return;
 
     const listener = App.addListener("backButton", () => {
+      const assistant = useAssistant.getState();
+
+      if (assistant.open) {
+        assistant.setOpen(false);
+        return;
+      }
+
       const player = usePlayer.getState();
 
       if (player.fullscreen) {

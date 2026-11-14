@@ -18,16 +18,17 @@ import (
 	"github.com/xelira/yuicry/backend/internal/storage"
 )
 
-var Version = "1.4.0"
+var Version = "1.5.0"
 
 type API struct {
-	Store    *Store
-	Auth     *Auth
-	Deezer   *Deezer
-	Covers   *CoverCache
-	Playback *PlaybackHub
-	Lyrics   *LyricsClient
-	Streamer *Streamer
+	Store     *Store
+	Auth      *Auth
+	Deezer    *Deezer
+	Covers    *CoverCache
+	Playback  *PlaybackHub
+	Lyrics    *LyricsClient
+	Streamer  *Streamer
+	Assistant *Assistant
 }
 
 func main() {
@@ -61,7 +62,7 @@ func main() {
 	streamer := NewStreamer(target, deezer, env("TEMP_DIR", os.TempDir()), env("YTDLP", "yt-dlp"), env("YTDLP_COOKIES", "/etc/yuicry/cookies.txt"), envInt("YTDLP_SLOTS", 3))
 
 	covers := NewCoverCache(env("COVER_CACHE", "/var/lib/yuicry/covers"), 512<<20)
-	api := &API{Store: store, Auth: auth, Deezer: deezer, Covers: covers, Playback: NewPlaybackHub(), Lyrics: NewLyricsClient(), Streamer: streamer}
+	api := &API{Store: store, Auth: auth, Deezer: deezer, Covers: covers, Playback: NewPlaybackHub(), Lyrics: NewLyricsClient(), Streamer: streamer, Assistant: NewAssistant()}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/version", api.handleVersion)
@@ -87,6 +88,7 @@ func main() {
 	mux.HandleFunc("POST /api/albums/{id}/tracks", api.handleAddTrack)
 	mux.HandleFunc("DELETE /api/albums/{id}/tracks/{track}", api.handleRemoveTrack)
 	mux.HandleFunc("GET /api/wave", api.handleWave)
+	mux.HandleFunc("POST /api/assistant", api.handleAssistant)
 	mux.HandleFunc("GET /api/similar/{id}", api.handleSimilar)
 	mux.HandleFunc("GET /api/artist/{id}", api.handleArtist)
 	mux.HandleFunc("GET /api/album/{id}", api.handleCatalogAlbum)

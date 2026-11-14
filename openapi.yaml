@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: yuicry API
-  version: 1.4.0
+  version: 1.5.0
   description: Музыкальный сервис yuicry. Все запросы, кроме публичных, используют cookie-сессию.
 servers:
   - url: https://yuicry.owaw.online
@@ -94,6 +94,62 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Track"
+
+  /api/assistant:
+    post:
+      summary: Голосовой ассистент
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  maxItems: 8
+                  items:
+                    type: object
+                    required: [role, content]
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                      content:
+                        type: string
+                context:
+                  type: object
+                  properties:
+                    track:
+                      type: string
+                    artist:
+                      type: string
+                    playing:
+                      type: boolean
+                    queue:
+                      type: integer
+                    likes:
+                      type: integer
+      responses:
+        "200":
+          description: Ответ ассистента
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+                  action:
+                    type: string
+                    enum: [none, play, pause, resume, next, previous, like, wave]
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+        "429":
+          description: Слишком много запросов
 
   /api/similar/{id}:
     get:

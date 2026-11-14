@@ -6,6 +6,8 @@ import { Capacitor } from "@capacitor/core";
 import { AudioWaveform, Heart, Library, Search as SearchIcon } from "lucide-react";
 
 import Albums from "@/components/Albums";
+import Assistant from "@/components/Assistant";
+import AssistantIcon from "@/components/AssistantIcon";
 import Background from "@/components/Background";
 import CatalogView from "@/components/CatalogView";
 import DragOverlay from "@/components/DragOverlay";
@@ -25,6 +27,7 @@ import { applyAuroraTone, fallbackPalette, paletteFromCover, type Palette } from
 import { useNav } from "@/store/navStore";
 import { currentTrack, usePlayer } from "@/store/playerStore";
 import { useAppearance } from "@/store/appearanceStore";
+import { useAssistant } from "@/store/assistantStore";
 import { useSettings } from "@/store/settingsStore";
 
 type Profile = {
@@ -279,6 +282,15 @@ export default function Home() {
 
           <div className="flex-1" />
 
+          <button
+            onClick={() => useAssistant.getState().setOpen(true)}
+            aria-label="Ассистент"
+            className="flex h-9 items-center gap-2 rounded-full border border-line px-2.5 text-[12px] text-muted transition-colors hover:border-lineStrong hover:text-ink sm:px-3"
+          >
+            <AssistantIcon size={17} />
+            <span className="hidden sm:block">Ассистент</span>
+          </button>
+
           {profile ? (
             <button
               onClick={() => {
@@ -442,6 +454,7 @@ export default function Home() {
       <Player />
       <MobileNav tab={settingsOpen ? null : tab} onChange={selectTab} compact={Boolean(track)} />
       <NowPlaying />
+      <Assistant />
       <SimilarSheet />
       <DragOverlay />
     </div>
