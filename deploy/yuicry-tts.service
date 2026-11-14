@@ -1,0 +1,19 @@
+[Unit]
+Description=yuicry text to speech
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yuicry
+Group=yuicry
+ExecStart=/usr/bin/python3 /usr/local/bin/yuicry-tts
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

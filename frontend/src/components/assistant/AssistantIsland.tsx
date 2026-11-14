@@ -3,6 +3,7 @@
 import { Maximize2, Mic, MicOff, X } from "lucide-react";
 
 import AssistantIcon from "@/components/AssistantIcon";
+import { coverSource } from "@/lib/audio";
 import type { AssistantMessage } from "@/store/assistantStore";
 import type { Track } from "@/store/playerStore";
 
@@ -44,7 +45,9 @@ export default function AssistantIsland({
     : busy
       ? "Ассистент"
       : last
-        ? "Ассистент"
+        ? last.tracks?.length
+          ? `${last.tracks.length} треков`
+          : "Ассистент"
         : track
           ? `${track.title} — ${track.artist}`
           : "Голосовой помощник";
@@ -86,6 +89,23 @@ export default function AssistantIsland({
           </div>
           <p className="truncate text-[10px] text-muted">{subtitle}</p>
         </div>
+
+        {!busy && !listening && last?.tracks && last.tracks.length > 0 && (
+          <button
+            onClick={onExpand}
+            aria-label="Открыть найденные треки"
+            className="flex shrink-0 -space-x-2 pl-1"
+          >
+            {last.tracks.slice(0, 3).map((item) => (
+              <img
+                key={item.id}
+                src={coverSource(item.cover_big, "small")}
+                alt=""
+                className="h-6 w-6 rounded-md border border-line object-cover"
+              />
+            ))}
+          </button>
+        )}
 
         <button
           onClick={onMic}

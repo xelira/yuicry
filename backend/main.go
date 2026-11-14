@@ -29,6 +29,7 @@ type API struct {
 	Lyrics    *LyricsClient
 	Streamer  *Streamer
 	Assistant *Assistant
+	TTS       *http.Client
 }
 
 func main() {
@@ -62,7 +63,7 @@ func main() {
 	streamer := NewStreamer(target, deezer, env("TEMP_DIR", os.TempDir()), env("YTDLP", "yt-dlp"), env("YTDLP_COOKIES", "/etc/yuicry/cookies.txt"), envInt("YTDLP_SLOTS", 3))
 
 	covers := NewCoverCache(env("COVER_CACHE", "/var/lib/yuicry/covers"), 512<<20)
-	api := &API{Store: store, Auth: auth, Deezer: deezer, Covers: covers, Playback: NewPlaybackHub(), Lyrics: NewLyricsClient(), Streamer: streamer, Assistant: NewAssistant()}
+	api := &API{Store: store, Auth: auth, Deezer: deezer, Covers: covers, Playback: NewPlaybackHub(), Lyrics: NewLyricsClient(), Streamer: streamer, Assistant: NewAssistant(), TTS: &http.Client{Timeout: 30 * time.Second}}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/version", api.handleVersion)
@@ -89,6 +90,7 @@ func main() {
 	mux.HandleFunc("DELETE /api/albums/{id}/tracks/{track}", api.handleRemoveTrack)
 	mux.HandleFunc("GET /api/wave", api.handleWave)
 	mux.HandleFunc("POST /api/assistant", api.handleAssistant)
+	mux.HandleFunc("GET /api/tts", api.handleTTS)
 	mux.HandleFunc("GET /api/similar/{id}", api.handleSimilar)
 	mux.HandleFunc("GET /api/artist/{id}", api.handleArtist)
 	mux.HandleFunc("GET /api/album/{id}", api.handleCatalogAlbum)

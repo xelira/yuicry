@@ -97,7 +97,7 @@ func (a *API) handleAssistant(w http.ResponseWriter, r *http.Request) {
 	tracks := make([]Track, 0, 5)
 	if draft.Search != "" {
 		if found, err := a.Deezer.Search(r.Context(), draft.Search, 0); err == nil {
-			tracks = take(found, 5)
+			tracks = take(found, 6)
 		}
 	}
 

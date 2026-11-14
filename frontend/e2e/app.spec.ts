@@ -178,3 +178,35 @@ test("ассистент открывается островком и разво
   await page.getByRole("button", { name: "Скрыть ассистента" }).click();
   await expect(page.getByRole("button", { name: "Развернуть ассистента" })).toHaveCount(0);
 });
+
+test("ассистент показывает треки и озвучивает ответ", async ({ page }) => {
+  let tts = "";
+
+  await page.route("**/api/assistant", (route) =>
+    route.fulfill({
+      json: { reply: "Вот треки", action: "none", tracks: [waveTrack, searchTrack] },
+    }),
+  );
+
+  await page.route("**/api/tts?*", (route) => {
+    tts = route.request().url();
+    return route.fulfill({
+      status: 200,
+      contentType: "audio/mpeg",
+      body: Buffer.alloc(128),
+    });
+  });
+
+  await page.getByRole("button", { name: "Ассистент" }).click();
+  await page.getByRole("button", { name: "Развернуть ассистента" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await dialog.getByLabel("Вопрос ассистенту").fill("посоветуй треки");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+
+  await expect(dialog.getByText("Вот треки")).toBeVisible();
+  await expect(dialog.getByText("Из каталога · 2")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Слушать все" })).toBeVisible();
+
+  expect(tts).toContain("/api/tts");
+});

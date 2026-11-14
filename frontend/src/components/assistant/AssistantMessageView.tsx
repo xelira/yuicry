@@ -39,27 +39,43 @@ export default function AssistantMessageView({ message, onPlay }: Props) {
         </p>
 
         {message.tracks && message.tracks.length > 0 && (
-          <div className="mt-2.5 overflow-hidden rounded-xl border border-line bg-surface">
-            {message.tracks.map((track, index) => (
+          <div className="mt-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted">
+                Из каталога · {message.tracks.length}
+              </p>
               <button
-                key={`${track.id}-${index}`}
-                onClick={() => onPlay(message.tracks!, index)}
-                className="flex w-full items-center gap-2.5 border-b border-line px-2.5 py-2 text-left transition-colors last:border-b-0 hover:bg-surface2"
+                onClick={() => onPlay(message.tracks!, 0)}
+                className="rounded-full border border-line px-2.5 py-1 text-[10px] text-ink transition-colors hover:border-lineStrong"
               >
-                <img
-                  src={coverSource(track.cover_big, "small")}
-                  alt=""
-                  className="h-9 w-9 shrink-0 rounded-md border border-line object-cover"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12px] text-ink">{track.title}</span>
-                  <span className="block truncate text-[11px] text-muted">{track.artist}</span>
-                </span>
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accentText">
-                  <Play size={13} fill="currentColor" />
-                </span>
+                Слушать все
               </button>
-            ))}
+            </div>
+
+            <div className="custom-scroll -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {message.tracks.map((track, index) => (
+                <button
+                  key={`${track.id}-${index}`}
+                  onClick={() => onPlay(message.tracks!, index)}
+                  className="group w-[128px] shrink-0 text-left"
+                >
+                  <span className="relative block aspect-square overflow-hidden rounded-xl border border-line bg-surface2">
+                    <img
+                      src={coverSource(track.cover_big, "medium")}
+                      alt=""
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                    <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition-colors group-hover:bg-accent group-hover:text-accentText">
+                      <Play size={12} fill="currentColor" />
+                    </span>
+                  </span>
+                  <span className="mt-1.5 block truncate text-[11px] font-medium text-ink">
+                    {track.title}
+                  </span>
+                  <span className="block truncate text-[10px] text-muted">{track.artist}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

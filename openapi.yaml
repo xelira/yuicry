@@ -151,6 +151,27 @@ paths:
         "429":
           description: Слишком много запросов
 
+  /api/tts:
+    get:
+      summary: Озвучка текста
+      parameters:
+        - name: text
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 600
+      responses:
+        "200":
+          description: MP3 с озвучкой
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        "502":
+          description: Озвучка недоступна
+
   /api/similar/{id}:
     get:
       summary: Похожие треки

@@ -12,7 +12,7 @@ say() {
 install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq curl ca-certificates ffmpeg nginx certbot python3-certbot-nginx
+  apt-get install -y -qq curl ca-certificates ffmpeg nginx certbot python3-certbot-nginx python3-pip
 }
 
 install_deno() {
@@ -62,6 +62,7 @@ OIDC_CLIENT_ID=yuicry
 OIDC_REDIRECT=https://yuicry.owaw.online/api/auth/callback
 SESSION_SECRET=$secret
 COOKIE_SECURE=1
+TTS_URL=http://127.0.0.1:8790
 EOF
 
   if [ -n "${NVIDIA_API_KEY:-}" ]; then
@@ -100,6 +101,14 @@ deploy_api() {
   install -m 755 "$root/dist/yuicry-api" /usr/local/bin/yuicry-api
   rm -rf /var/www/yuicry/*
   cp -a "$root/frontend/out/." /var/www/yuicry/
+
+  say "озвучка"
+  python3 -m pip install -q --break-system-packages edge-tts
+  install -m 755 "$here/yuicry-tts.py" /usr/local/bin/yuicry-tts
+  install -m 644 "$here/yuicry-tts.service" /etc/systemd/system/yuicry-tts.service
+  systemctl daemon-reload
+  systemctl enable --now yuicry-tts
+  systemctl restart yuicry-tts
 
   say "systemd"
   install -m 644 "$here/yuicry-api.service" /etc/systemd/system/yuicry-api.service

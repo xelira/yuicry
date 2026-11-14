@@ -1,5 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
+import { audioElement } from "@/lib/audio";
+
 type NativeAssistant = {
   checkMicrophone: () => Promise<{ granted: boolean }>;
   requestMicrophone: () => Promise<{ granted: boolean }>;
@@ -43,6 +45,11 @@ type RecognitionConstructor = new () => Recognition;
 
 const native = registerPlugin<NativeAssistant>("Assistant");
 
+let voiceAudio: HTMLAudioElement | null = null;
+let voiceURL = "";
+let speechToken = 0;
+let duckedVolume: number | null = null;
+
 export type ListeningSession = {
   result: Promise<string>;
   stop: () => void;
@@ -65,9 +72,7 @@ export function speechSupported() {
 }
 
 export function ttsSupported() {
-  if (typeof window === "undefined") return false;
-  if (nativeSpeech()) return true;
-  return "speechSynthesis" in window;
+  return typeof window !== "undefined";
 }
 
 export async function requestMicrophone() {
@@ -187,6 +192,53 @@ export async function speak(text: string) {
   const value = text.trim();
   if (!value) return;
 
+  const token = ++speechToken;
+  stopVoiceAudio();
+
+  try {
+    const response = await fetch(`/api/tts?text=${encodeURIComponent(value)}`);
+    if (!response.ok) throw new Error("tts");
+
+    const blob = await response.blob();
+    if (token !== speechToken) return;
+
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    voiceAudio = audio;
+    voiceURL = url;
+
+    const music = audioElement();
+    duckedVolume = music.volume;
+    music.volume = Math.min(music.volume, 0.22);
+
+    const restore = () => {
+      if (voiceURL === url) {
+        URL.revokeObjectURL(url);
+        voiceURL = "";
+        voiceAudio = null;
+      }
+
+      if (duckedVolume !== null) {
+        music.volume = duckedVolume;
+        duckedVolume = null;
+      }
+    };
+
+    audio.onended = restore;
+    audio.onerror = restore;
+
+    try {
+      await audio.play();
+      return;
+    } catch (error) {
+      restore();
+    }
+  } catch (error) {
+    if (token !== speechToken) return;
+  }
+
+  if (token !== speechToken) return;
+
   if (nativeSpeech()) {
     await native.speak({ text: value }).catch(() => undefined);
     return;
@@ -210,12 +262,32 @@ export async function speak(text: string) {
 }
 
 export function stopSpeaking() {
+  speechToken += 1;
+  stopVoiceAudio();
+
   if (nativeSpeech()) {
     void native.stopSpeaking().catch(() => undefined);
-    return;
   }
 
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
+function stopVoiceAudio() {
+  if (voiceAudio) {
+    voiceAudio.pause();
+    voiceAudio.src = "";
+    voiceAudio = null;
+  }
+
+  if (voiceURL) {
+    URL.revokeObjectURL(voiceURL);
+    voiceURL = "";
+  }
+
+  if (duckedVolume !== null) {
+    audioElement().volume = duckedVolume;
+    duckedVolume = null;
+  }
 }
 
 function errorText(error: string) {
