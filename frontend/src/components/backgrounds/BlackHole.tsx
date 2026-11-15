@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import { levels } from "@/lib/audio";
-import { currentAccent } from "@/lib/color";
 import { alpha, grainTexture, mixHex, tone, useBackgroundCanvas } from "@/lib/background";
 import type { Palette } from "@/lib/palette";
 import { useAccentColor } from "@/lib/useAccentColor";
@@ -23,20 +22,20 @@ void main() {
 }
 `;
 
-const fragmentShader = `
+const sceneShader = `
 precision highp float;
 
 uniform float uTime;
 uniform float uBass;
 uniform float uLight;
 uniform vec2 uResolution;
+uniform vec2 uShift;
 uniform vec3 uHot;
 uniform vec3 uWarm;
 uniform vec3 uDeep;
-uniform vec2 uShift;
 
 const float HORIZON = 1.0;
-const float DISK_IN = 2.7;
+const float DISK_IN = 2.65;
 const float DISK_OUT = 8.5;
 const int STEPS = 150;
 
@@ -82,57 +81,53 @@ vec3 sky(vec3 dir) {
   if (uLight > 0.5) {
     vec3 base = vec3(0.985, 0.972, 0.952);
     float neb = fbm3(dir * 2.6 + 5.0);
-    base = mix(base, uWarm * 0.8, neb * 0.3);
-
-    vec3 q = dir * 46.0;
-    vec3 id = floor(q);
-    vec3 f = fract(q) - 0.5;
-    float h = hash13(id);
-
-    if (h > 0.984) {
-      float d = length(f);
-      base -= vec3(0.16, 0.13, 0.12) * smoothstep(0.3, 0.0, d);
-    }
-
+    base = mix(base, uWarm * 0.8, neb * 0.22);
     return base;
   }
 
-  vec3 base = vec3(0.014, 0.013, 0.02);
+  vec3 base = vec3(0.012, 0.011, 0.017);
   float neb = fbm3(dir * 2.6 + 5.0);
-  base += uWarm * neb * 0.14;
+  base += uWarm * neb * 0.1;
 
-  vec3 q = dir * 46.0;
+  vec3 q = dir * 44.0;
   vec3 id = floor(q);
   vec3 f = fract(q) - 0.5;
   float h = hash13(id);
 
-  if (h > 0.982) {
+  if (h > 0.988) {
     float d = length(f);
-    float star = smoothstep(0.34, 0.0, d);
+    float star = smoothstep(0.22, 0.0, d);
     float twinkle = 0.55 + 0.45 * sin(uTime * 1.7 + h * 90.0);
-    base += vec3(0.85, 0.88, 1.0) * star * twinkle * 1.25;
+    base += vec3(0.85, 0.88, 1.0) * star * twinkle * 0.85;
   }
 
   return base;
 }
 
-vec3 diskColor(vec3 p, float r) {
+vec3 diskColor(vec3 p, float r, vec3 viewDir) {
   float omega = 1.0 / pow(r, 1.5);
   vec2 swirl = rot2(p.xz, -uTime * omega * 5.5);
-  float grain = fbm3(vec3(swirl * 1.8, r * 0.85));
-  float filament = fbm3(vec3(swirl * 4.2, r * 1.6));
-  float striation = 0.5 + 0.5 * sin(r * 13.0 + grain * 14.0);
-  float bands = 0.18 + 0.7 * grain + 0.22 * striation + 0.28 * filament;
 
-  float heat = clamp(2.5 / r, 0.0, 1.0);
-  heat = pow(heat, 1.4);
+  float grain = fbm3(vec3(swirl * 1.6, r * 0.7));
+  float filament = fbm3(vec3(swirl * 4.6, r * 1.5));
+  float striation = 0.5 + 0.5 * sin(r * 15.0 + grain * 13.0);
+  float bands = 0.14 + 0.62 * grain + 0.24 * striation + 0.38 * filament;
+
+  float heat = clamp(2.4 / r, 0.0, 1.0);
+  heat = pow(heat, 1.8);
 
   vec3 col = mix(uDeep, uWarm, smoothstep(0.0, 0.62, heat));
-  col = mix(col, uHot, smoothstep(0.72, 1.0, heat));
+  col = mix(col, uHot, smoothstep(0.74, 1.0, heat));
 
-  float bright = pow(2.5 / r, 2.1);
-  col *= (0.32 + bands * 1.85) * (0.38 + bright) * (1.0 + uBass * 0.4);
-  col *= 1.0 + 2.6 * smoothstep(4.6, 2.7, r);
+  float bright = pow(2.4 / r, 2.3);
+  col *= (0.2 + bands * 1.5) * (0.3 + bright);
+  col *= 1.0 + 1.9 * smoothstep(4.2, 2.65, r);
+  col *= 1.0 + uBass * 0.45;
+
+  vec3 velocity = normalize(vec3(p.z, 0.0, -p.x));
+  float beam = dot(velocity, viewDir);
+  col *= 1.0 + 0.9 * beam;
+  col *= 1.0 - uLight * 0.24;
 
   return col;
 }
@@ -153,8 +148,10 @@ void main() {
   vec3 angular = cross(pos, vel);
   float h2 = dot(angular, angular);
 
-  vec3 col = vec3(0.0);
-  float transmit = 1.0;
+  vec3 nearCol = vec3(0.0);
+  vec3 farCol = vec3(0.0);
+  float nearTransmit = 1.0;
+  float farTransmit = 1.0;
   float captured = 0.0;
   float halo = 0.0;
 
@@ -171,7 +168,7 @@ void main() {
     float r = sqrt(r2);
     float dt = r > 18.0 ? 0.24 * r : clamp(0.05 * r, 0.045, 0.5);
 
-    halo += exp(-abs(r - 1.5) * 3.2) * dt * 0.5;
+    halo += exp(-abs(r - 1.5) * 2.4) * dt * 0.34;
 
     vec3 acceleration = -1.5 * h2 * pos / (r2 * r2 * r);
     vel += acceleration * dt;
@@ -184,36 +181,75 @@ void main() {
       float hr = length(hit.xz);
 
       if (hr > DISK_IN && hr < DISK_OUT) {
-        vec3 dc = diskColor(hit, hr);
-        float density = smoothstep(DISK_IN, DISK_IN + 1.4, hr) * (1.0 - smoothstep(DISK_OUT - 3.2, DISK_OUT, hr));
-        density *= 0.5 + 0.5 * fbm3(vec3(hit.xz * 0.65, hr * 0.4));
+        vec3 viewDir = normalize(-vel);
+        vec3 dc = diskColor(hit, hr, viewDir);
 
-        col += dc * clamp(density, 0.0, 1.0) * 1.25 * transmit;
-        transmit *= 1.0 - clamp(density * 0.92, 0.0, 1.0);
+        float density = smoothstep(DISK_IN, DISK_IN + 0.9, hr) * (1.0 - smoothstep(DISK_OUT - 3.0, DISK_OUT, hr));
+        density *= 0.45 + 0.55 * fbm3(vec3(hit.xz * 0.7, hr * 0.5));
+        density = clamp(density, 0.0, 1.0);
 
-        if (transmit < 0.03) break;
+        if (pos.y > next.y) {
+          nearCol += dc * density * 1.1 * nearTransmit;
+          nearTransmit *= 1.0 - clamp(density * 1.15, 0.0, 1.0);
+        } else {
+          farCol += dc * density * 1.1 * farTransmit;
+          farTransmit *= 1.0 - clamp(density * 1.15, 0.0, 1.0);
+        }
+
+        if (nearTransmit * farTransmit < 0.02) break;
       }
     }
 
     pos = next;
   }
 
+  vec3 col = nearCol;
+
   if (captured < 0.5) {
-    col += sky(normalize(vel)) * transmit;
-    col += mix(uWarm, uHot, 0.5) * halo * (1.0 - uLight * 0.5);
-  } else {
-    float wash = dot(col, vec3(0.333));
-    col *= smoothstep(0.04, 0.4, wash);
+    col += farCol * nearTransmit;
+    col += sky(normalize(vel)) * nearTransmit * farTransmit;
+    col += mix(uWarm, uHot, 0.45) * halo * (1.0 - uLight * 0.5);
   }
 
   if (uLight < 0.5) {
-    col = col / (1.0 + col * 0.62);
+    col = col / (1.0 + col * 0.55);
   }
 
   float luma = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(vec3(luma), col, 1.0 + (1.0 - uLight) * 0.35);
+  col = mix(vec3(luma), col, 1.0 + (1.0 - uLight) * 0.4);
 
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}
+`;
+
+const bloomShader = `
+precision mediump float;
+
+uniform sampler2D uScene;
+uniform vec2 uTexel;
+uniform float uLight;
+varying vec2 vUv;
+
+void main() {
+  vec3 base = texture2D(uScene, vUv).rgb;
+  vec3 glow = vec3(0.0);
+  float total = 0.0;
+
+  for (int x = -3; x <= 3; x++) {
+    for (int y = -3; y <= 3; y++) {
+      vec2 offset = vec2(float(x), float(y)) * uTexel * 2.4;
+      vec3 sampleColor = texture2D(uScene, vUv + offset).rgb;
+      float weight = exp(-float(x * x + y * y) / 7.0);
+
+      glow += max(sampleColor - 0.42, 0.0) * weight;
+      total += weight;
+    }
+  }
+
+  glow /= total;
+
+  vec3 color = base + glow * (uLight > 0.5 ? 0.42 : 1.05);
+  gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 `;
 
@@ -250,11 +286,10 @@ function paletteTriple(
   colors: Palette,
   light: boolean,
 ): [[number, number, number], [number, number, number], [number, number, number]] {
-  const warm = light ? colors[0] : mixHex(colors[0], "#ffffff", 0.08);
-  const hot = light ? mixHex("#fff8ee", colors[0], 0.28) : mixHex("#fff6e8", colors[0], 0.14);
-  const deep = light
-    ? mixHex(colors[1], "#2a0b06", 0.45)
-    : mixHex(colors[1], "#170409", 0.86);
+  const tint = mixHex("#ff7a33", colors[0], 0.12);
+  const warm = light ? mixHex(tint, "#ff5a20", 0.35) : tint;
+  const hot = light ? mixHex("#fff8ee", warm, 0.34) : mixHex("#fff6e8", warm, 0.2);
+  const deep = light ? mixHex(warm, "#2a0803", 0.5) : mixHex(warm, "#1c0503", 0.78);
 
   return [rgb(hot), rgb(warm), rgb(deep)];
 }
@@ -288,18 +323,6 @@ function BlackHoleFlat({ colors, light = false }: Props) {
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, width, height);
 
-    if (!light) {
-      for (let index = 0; index < 90; index += 1) {
-        const x = (index * 137.51) % width;
-        const y = (index * 71.93) % (height * 0.86);
-        const flicker = 0.5 + 0.5 * Math.sin(time * 0.5 + index * 1.7);
-        const size = index % 11 === 0 ? 1.6 : 1;
-
-        ctx.fillStyle = `rgba(255,255,255,${0.06 + flicker * 0.2})`;
-        ctx.fillRect(x, y, size, size);
-      }
-    }
-
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(tilt);
@@ -317,20 +340,6 @@ function BlackHoleFlat({ colors, light = false }: Props) {
     ctx.arc(0, 0, radius * inner, 0, Math.PI * 2, true);
     ctx.fillStyle = disk;
     ctx.fill("evenodd");
-
-    for (let index = 0; index < 54; index += 1) {
-      const t = index / 54;
-      const orbit = radius * (inner + t * (outer - inner));
-      const start = (index * 2.399 + spin * (0.6 + (index % 3) * 0.22)) % (Math.PI * 2);
-      const length = 0.55 + (index % 5) * 0.24;
-      const fade = Math.pow(1 - t, 1.5);
-
-      ctx.strokeStyle = alpha(mixHex(hot, warm, t), fade * (light ? 0.42 : 0.62));
-      ctx.lineWidth = Math.max(1.2, radius * 0.024);
-      ctx.beginPath();
-      ctx.arc(0, 0, orbit, start, start + length);
-      ctx.stroke();
-    }
 
     ctx.strokeStyle = alpha(hot, light ? 0.85 : 1);
     ctx.lineWidth = Math.max(1.2, radius * 0.026);
@@ -356,12 +365,6 @@ function BlackHoleFlat({ colors, light = false }: Props) {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = alpha(warm, light ? 0.16 : 0.22);
-    ctx.lineWidth = Math.max(1, radius * 0.03);
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 1.19, 0, Math.PI * 2);
-    ctx.stroke();
-
     for (let index = 0; index < 52; index += 1) {
       const phase = time * (0.16 + (index % 6) * 0.022) + index * 1.61;
       const drift = (((index / 52 + time * 0.01) % 1) + 1) % 1;
@@ -376,16 +379,6 @@ function BlackHoleFlat({ colors, light = false }: Props) {
       ctx.fill();
     }
 
-    if (light) {
-      const shade = ctx.createRadialGradient(cx, cy, radius * 0.95, cx, cy, radius * 1.75);
-      shade.addColorStop(0, "rgba(12,8,8,0.16)");
-      shade.addColorStop(0.55, "rgba(12,8,8,0.06)");
-      shade.addColorStop(1, "rgba(12,8,8,0)");
-
-      ctx.fillStyle = shade;
-      ctx.fillRect(cx - radius * 2, cy - radius * 2, radius * 4, radius * 4);
-    }
-
     const core = ctx.createRadialGradient(cx, cy, radius * 0.3, cx, cy, radius);
     core.addColorStop(0, "#000000");
     core.addColorStop(0.88, "#000000");
@@ -398,12 +391,6 @@ function BlackHoleFlat({ colors, light = false }: Props) {
 
     ctx.strokeStyle = alpha(hot, 1);
     ctx.lineWidth = Math.max(1.6, radius * 0.026);
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 1.03, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = alpha(hot, light ? 0.2 : 0.3);
-    ctx.lineWidth = Math.max(7, radius * 0.14);
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 1.03, 0, Math.PI * 2);
     ctx.stroke();
@@ -523,24 +510,33 @@ function BlackHoleScene({ colors, light = false }: Props) {
       });
       if (!gl) return;
 
-      const vertex = compile(gl, gl.VERTEX_SHADER, vertexShader);
-      const fragment = compile(gl, gl.FRAGMENT_SHADER, fragmentShader);
+      const sceneVertex = compile(gl, gl.VERTEX_SHADER, vertexShader);
+      const sceneFragment = compile(gl, gl.FRAGMENT_SHADER, sceneShader);
+      const bloomFragment = compile(gl, gl.FRAGMENT_SHADER, bloomShader);
 
-      if (!vertex || !fragment) {
+      if (!sceneVertex || !sceneFragment || !bloomFragment) {
         gl.getExtension("WEBGL_lose_context")?.loseContext();
         return;
       }
 
-      const program = gl.createProgram();
-      if (!program) return;
+      const makeProgram = (fragment: WebGLShader) => {
+        const program = gl.createProgram();
+        if (!program) return null;
 
-      gl.attachShader(program, vertex);
-      gl.attachShader(program, fragment);
-      gl.linkProgram(program);
+        gl.attachShader(program, sceneVertex);
+        gl.attachShader(program, fragment);
+        gl.linkProgram(program);
 
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
 
-      gl.useProgram(program);
+        return program;
+      };
+
+      const sceneProgram = makeProgram(sceneFragment);
+      const bloomProgram = makeProgram(bloomFragment);
+
+      if (!sceneProgram || !bloomProgram) return;
+
       holder.appendChild(canvas);
 
       const buffer = gl.createBuffer();
@@ -551,19 +547,37 @@ function BlackHoleScene({ colors, light = false }: Props) {
         gl.STATIC_DRAW,
       );
 
-      const position = gl.getAttribLocation(program, "aPosition");
-      gl.enableVertexAttribArray(position);
-      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      const bindQuad = (program: WebGLProgram) => {
+        gl.useProgram(program);
+        const position = gl.getAttribLocation(program, "aPosition");
+        gl.enableVertexAttribArray(position);
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      };
 
-      const uniform = (name: string) => gl.getUniformLocation(program, name);
-      const time = uniform("uTime");
-      const bass = uniform("uBass");
-      const lightUniform = uniform("uLight");
-      const resolution = uniform("uResolution");
-      const hot = uniform("uHot");
-      const warm = uniform("uWarm");
-      const deep = uniform("uDeep");
-      const shift = uniform("uShift");
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+      const framebuffer = gl.createFramebuffer();
+
+      const uniform = (program: WebGLProgram, name: string) =>
+        gl.getUniformLocation(program, name);
+
+      const time = uniform(sceneProgram, "uTime");
+      const bass = uniform(sceneProgram, "uBass");
+      const lightUniform = uniform(sceneProgram, "uLight");
+      const resolution = uniform(sceneProgram, "uResolution");
+      const shift = uniform(sceneProgram, "uShift");
+      const hot = uniform(sceneProgram, "uHot");
+      const warm = uniform(sceneProgram, "uWarm");
+      const deep = uniform(sceneProgram, "uDeep");
+
+      const bloomScene = uniform(bloomProgram, "uScene");
+      const bloomTexel = uniform(bloomProgram, "uTexel");
+      const bloomLight = uniform(bloomProgram, "uLight");
 
       const current = targets.current.map((color) => [...color]);
       let lightMix = light ? 1 : 0;
@@ -574,6 +588,8 @@ function BlackHoleScene({ colors, light = false }: Props) {
       let lastDraw = 0;
       let quality = 0.8;
       let tunedAt = 0;
+      let bufferWidth = 2;
+      let bufferHeight = 2;
       const started = performance.now();
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -585,15 +601,39 @@ function BlackHoleScene({ colors, light = false }: Props) {
         if (width === 0 || height === 0) return;
 
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
-        const bufferWidth = Math.max(2, Math.round(width * ratio * quality));
-        const bufferHeight = Math.max(2, Math.round(height * ratio * quality));
+        bufferWidth = Math.max(2, Math.round(width * ratio * quality));
+        bufferHeight = Math.max(2, Math.round(height * ratio * quality));
 
         if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
           canvas.width = bufferWidth;
           canvas.height = bufferHeight;
         }
 
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          bufferWidth,
+          bufferHeight,
+          0,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          null,
+        );
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(
+          gl.FRAMEBUFFER,
+          gl.COLOR_ATTACHMENT0,
+          gl.TEXTURE_2D,
+          texture,
+          0,
+        );
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
         gl.viewport(0, 0, bufferWidth, bufferHeight);
+        gl.useProgram(sceneProgram);
         gl.uniform2f(resolution, bufferWidth, bufferHeight);
 
         const aspect = width / Math.max(height, 1);
@@ -602,6 +642,9 @@ function BlackHoleScene({ colors, light = false }: Props) {
           aspect > 1.35 ? -Math.min(0.9, aspect * 0.34) : 0.0,
           aspect > 1.35 ? 0.05 : 0.13,
         );
+
+        gl.useProgram(bloomProgram);
+        gl.uniform2f(bloomTexel, 1 / bufferWidth, 1 / bufferHeight);
       };
 
       const draw = (now: number) => {
@@ -620,13 +663,6 @@ function BlackHoleScene({ colors, light = false }: Props) {
 
         lightMix += (lightTarget.current - lightMix) * 0.08;
 
-        gl.uniform3f(hot, current[0][0], current[0][1], current[0][2]);
-        gl.uniform3f(warm, current[1][0], current[1][1], current[1][2]);
-        gl.uniform3f(deep, current[2][0], current[2][1], current[2][2]);
-        gl.uniform1f(time, (performance.now() - started) / 1000);
-        gl.uniform1f(bass, sound.bass);
-        gl.uniform1f(lightUniform, lightMix);
-
         if (now - tunedAt > 1600) {
           tunedAt = now;
 
@@ -638,6 +674,27 @@ function BlackHoleScene({ colors, light = false }: Props) {
             resize();
           }
         }
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.viewport(0, 0, bufferWidth, bufferHeight);
+        bindQuad(sceneProgram);
+
+        gl.uniform3f(hot, current[0][0], current[0][1], current[0][2]);
+        gl.uniform3f(warm, current[1][0], current[1][1], current[1][2]);
+        gl.uniform3f(deep, current[2][0], current[2][1], current[2][2]);
+        gl.uniform1f(time, (performance.now() - started) / 1000);
+        gl.uniform1f(bass, sound.bass);
+        gl.uniform1f(lightUniform, lightMix);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, bufferWidth, bufferHeight);
+        bindQuad(bloomProgram);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(bloomScene, 0);
+        gl.uniform1f(bloomLight, lightMix);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       };
 
@@ -728,10 +785,14 @@ function BlackHoleScene({ colors, light = false }: Props) {
           window.removeEventListener("focus", onVisibility);
           window.visualViewport?.removeEventListener("resize", resize);
           document.removeEventListener("visibilitychange", onVisibility);
+          gl.deleteFramebuffer(framebuffer);
+          gl.deleteTexture(texture);
           gl.deleteBuffer(buffer);
-          gl.deleteProgram(program);
-          gl.deleteShader(vertex);
-          gl.deleteShader(fragment);
+          gl.deleteProgram(sceneProgram);
+          gl.deleteProgram(bloomProgram);
+          gl.deleteShader(sceneVertex);
+          gl.deleteShader(sceneFragment);
+          gl.deleteShader(bloomFragment);
           canvas.remove();
         },
       };
