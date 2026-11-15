@@ -261,7 +261,10 @@ function recordSession(onStatus?: (text: string) => void): ListeningSession {
   };
 }
 
-export async function speak(text: string) {
+export async function speak(
+  text: string,
+  options?: { voice?: "svetlana" | "dmitry"; rate?: number },
+) {
   const value = text.trim();
   if (!value) return;
 
@@ -269,7 +272,11 @@ export async function speak(text: string) {
   stopVoiceAudio();
 
   try {
-    const response = await fetch(`/api/tts?text=${encodeURIComponent(value)}`);
+    const query = new URLSearchParams({ text: value });
+    if (options?.voice) query.set("voice", options.voice);
+    if (options?.rate) query.set("rate", String(options.rate));
+
+    const response = await fetch(`/api/tts?${query.toString()}`);
     if (!response.ok) throw new Error("tts");
 
     const blob = await response.blob();
@@ -323,11 +330,17 @@ export async function speak(text: string) {
 
   const utterance = new SpeechSynthesisUtterance(value);
   utterance.lang = "ru-RU";
-  utterance.rate = 1.03;
+  utterance.rate = options?.rate ?? 1;
 
-  const voice = window.speechSynthesis
-    .getVoices()
-    .find((item) => item.lang.toLowerCase().startsWith("ru"));
+  const voices = window.speechSynthesis.getVoices();
+  const russian = voices.filter((item) => item.lang.toLowerCase().startsWith("ru"));
+  const preferred = options?.voice === "dmitry"
+    ? ["dmitry", "dmitri", "pavel", "yuri", "male"]
+    : ["svetlana", "milena", "irina", "female"];
+
+  const voice = preferred
+    .map((name) => russian.find((item) => item.name.toLowerCase().includes(name)))
+    .find(Boolean) ?? russian[0];
 
   if (voice) utterance.voice = voice;
 

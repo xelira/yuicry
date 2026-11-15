@@ -32,13 +32,22 @@ type AssistantAttachment struct {
 }
 
 type AssistantContext struct {
-	Track      string               `json:"track"`
-	Artist     string               `json:"artist"`
-	Playing    bool                 `json:"playing"`
-	Queue      int                  `json:"queue"`
-	Likes      int                  `json:"likes"`
-	LastTracks []string             `json:"last_tracks"`
-	Attachment *AssistantAttachment `json:"attachment"`
+	Track       string               `json:"track"`
+	Artist      string               `json:"artist"`
+	Playing     bool                 `json:"playing"`
+	Queue       int                  `json:"queue"`
+	Likes       int                  `json:"likes"`
+	LastTracks  []string             `json:"last_tracks"`
+	Attachment  *AssistantAttachment `json:"attachment"`
+	QueueTracks []Track              `json:"queue_tracks"`
+	QueueIndex  int                  `json:"queue_index"`
+	Voice       bool                 `json:"voice"`
+}
+
+type AssistantPlaylist struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Count int    `json:"count"`
 }
 
 type assistantRequest struct {
@@ -47,11 +56,13 @@ type assistantRequest struct {
 }
 
 type assistantResult struct {
-	Reply   string
-	Action  string
-	Index   int
-	Tracks  []Track
-	Sources []webResult
+	Reply      string
+	Action     string
+	Index      int
+	Tracks     []Track
+	Sources    []webResult
+	Suggestion string
+	Playlist   *AssistantPlaylist
 }
 
 type Assistant struct {
@@ -71,6 +82,9 @@ var (
 	recommendIntent  = regexp.MustCompile(`(?i)(посоветуй|посоветуйте|что послушать|похожее|похожие|подборк|рекоменд|найди|поищи|покажи треки|какую музыку)`)
 	numberIntent     = regexp.MustCompile(`(?i)(?:номер|№|под номером|песн[юя]|трек)\s*(\d{1,2})|(\d{1,2})\s*(?:-?й|трек|песн)`)
 	attachmentMarker = regexp.MustCompile(`(?m)^\[Вложение:[^\]]*\]\s*`)
+	queueIntent      = regexp.MustCompile(`(?i)(следующим|следующ|в очередь|после этого|дальше в очереди|что играет после|убери|удали|повтори|перемешай|перемешать|сохрани очередь)`)
+	dislikePattern   = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(не ставь|не включай|не люблю|не нравится|терпеть не могу)\s+(.+)$`)
+	likePattern      = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(мне нравится|мне нравятся|я люблю|люблю|обожаю)\s+(.+)$`)
 )
 
 func NewAssistant() *Assistant {
@@ -127,11 +141,13 @@ func (a *API) handleAssistant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"reply":   result.Reply,
-		"action":  result.Action,
-		"index":   result.Index,
-		"tracks":  result.Tracks,
-		"sources": result.Sources,
+		"reply":      result.Reply,
+		"action":     result.Action,
+		"index":      result.Index,
+		"tracks":     result.Tracks,
+		"sources":    result.Sources,
+		"suggestion": result.Suggestion,
+		"playlist":   result.Playlist,
 	})
 }
 
@@ -144,7 +160,32 @@ func (a *API) askAssistant(ctx context.Context, userID string, history []Assista
 		}
 	}
 
-	messages := append([]AssistantMessage{{Role: "system", Content: assistantPrompt(info)}}, history...)
+	memory, _ := a.Store.AssistantMemory(userID)
+	stats := a.Store.ListeningStats(userID)
+
+	if info.Voice && lastUser != "" {
+		corrected, confidence, suggestion := a.correctVoice(ctx, userID, lastUser, info, memory)
+
+		if confidence < 0.45 && suggestion != "" {
+			return assistantResult{
+				Reply:      "Ты про «" + suggestion + "»?",
+				Action:     "confirm",
+				Suggestion: suggestion,
+			}, nil
+		}
+
+		if corrected != "" && confidence >= 0.45 && !strings.EqualFold(corrected, lastUser) {
+			for index := len(history) - 1; index >= 0; index -= 1 {
+				if history[index].Role == "user" {
+					history[index].Content = strings.Replace(history[index].Content, lastUser, corrected, 1)
+					break
+				}
+			}
+			lastUser = corrected
+		}
+	}
+
+	messages := append([]AssistantMessage{{Role: "system", Content: assistantPrompt(info, memory, stats)}}, history...)
 	result := assistantResult{Action: "none"}
 	usedWeb := false
 	var web []webResult
@@ -174,7 +215,7 @@ func (a *API) askAssistant(ctx context.Context, userID string, history []Assista
 
 		for index := range turn.ToolCalls {
 			call := turn.ToolCalls[index]
-			tool := a.runAssistantTool(ctx, userID, call)
+			tool := a.runAssistantTool(ctx, userID, call, info)
 			messages = append(messages, AssistantMessage{
 				Role:       "tool",
 				ToolCallID: call.ID,
@@ -191,6 +232,10 @@ func (a *API) askAssistant(ctx context.Context, userID string, history []Assista
 				result.Index = tool.Index
 			}
 
+			if tool.Playlist != nil {
+				result.Playlist = tool.Playlist
+			}
+
 			if tool.Web {
 				usedWeb = true
 			}
@@ -204,7 +249,7 @@ func (a *API) askAssistant(ctx context.Context, userID string, history []Assista
 
 	if result.Action == "none" {
 		if strongIntent(lastUser) {
-			a.intentFallback(ctx, userID, lastUser, &result)
+			a.intentFallback(ctx, userID, lastUser, &result, info, stats)
 		} else if len(result.Tracks) == 0 && recommendIntent.MatchString(lastUser) {
 			query := cleanQuery(lastUser)
 
@@ -357,9 +402,116 @@ func (a *Assistant) Chat(ctx context.Context, messages []AssistantMessage, tools
 	return turn, nil
 }
 
-func (a *API) intentFallback(ctx context.Context, userID, message string, result *assistantResult) {
+func (a *API) intentFallback(ctx context.Context, userID, message string, result *assistantResult, info AssistantContext, stats ListeningStats) {
 	value := strings.ToLower(strings.TrimSpace(message))
 	if value == "" {
+		return
+	}
+
+	if kind, values := preferenceIntent(value); kind != "" {
+		for _, item := range values {
+			_ = a.Store.RememberPreference(userID, kind, item)
+		}
+
+		result.Action = "none"
+		if kind == "like" {
+			result.Reply = "Запомнил: тебе нравится " + strings.Join(values, ", ") + "."
+		} else {
+			result.Reply = "Запомнил: больше не ставлю " + strings.Join(values, ", ") + "."
+		}
+		return
+	}
+
+	if strings.Contains(value, "часто") && (strings.Contains(value, "слушаю") || strings.Contains(value, "слушал")) {
+		evening := strings.Contains(value, "вечер")
+		tracks := stats.TopTracks
+		if evening {
+			tracks = stats.Evening
+		}
+
+		if len(tracks) == 0 {
+			result.Reply = "Пока не хватает истории прослушиваний. Послушай несколько треков, и я запомню."
+			return
+		}
+
+		result.Tracks = tracks
+
+		if playIntent.MatchString(value) {
+			result.Action = "play"
+			result.Reply = "Включаю «" + tracks[0].Title + "» — " + tracks[0].Artist + "."
+		} else {
+			result.Action = "none"
+			if evening {
+				result.Reply = "Чаще всего вечером ты слушаешь: " + tracks[0].Title + " — " + tracks[0].Artist + "."
+			} else {
+				result.Reply = "Чаще всего ты слушаешь: " + tracks[0].Title + " — " + tracks[0].Artist + "."
+			}
+		}
+		return
+	}
+
+	if strings.Contains(value, "сохрани") && strings.Contains(value, "очеред") {
+		playlist, err := a.saveQueuePlaylist(userID, info.QueueTracks, "")
+		if err != nil {
+			result.Reply = "Не удалось сохранить очередь: она пуста."
+			return
+		}
+
+		result.Action = "queue_saved"
+		result.Playlist = playlist
+		result.Reply = fmt.Sprintf("Сохранил очередь в плейлист «%s» (%d %s).", playlist.Title, playlist.Count, pluralTracks(playlist.Count))
+		return
+	}
+
+	if strings.Contains(value, "поставь следующим") || strings.Contains(value, "следующим") {
+		query := cleanQuery(message)
+		if query == "" {
+			result.Reply = "Что поставить следующим?"
+			return
+		}
+
+		tracks := a.searchTracks(ctx, query, 3)
+		if len(tracks) == 0 {
+			result.Reply = notFoundReply(message)
+			return
+		}
+
+		result.Action = "queue_next"
+		result.Tracks = tracks
+		result.Reply = "Поставил следующим: «" + tracks[0].Title + "» — " + tracks[0].Artist + "."
+		return
+	}
+
+	if (strings.Contains(value, "убери") || strings.Contains(value, "удали")) && (strings.Contains(value, "трек") || strings.Contains(value, "этот")) {
+		result.Action = "remove_current"
+		result.Reply = "Убрал текущий трек из очереди."
+		return
+	}
+
+	if strings.Contains(value, "повтори") && (strings.Contains(value, "трек") || strings.Contains(value, "этот")) {
+		result.Action = "repeat"
+		result.Reply = "Повторяю текущий трек."
+		return
+	}
+
+	if strings.Contains(value, "перемешай") || strings.Contains(value, "перемешать") {
+		result.Action = "shuffle"
+		result.Reply = "Перемешал очередь."
+		return
+	}
+
+	if strings.Contains(value, "что играет после") || strings.Contains(value, "что дальше") || strings.Contains(value, "после этого") {
+		next := []Track{}
+		if info.QueueIndex+1 < len(info.QueueTracks) {
+			next = info.QueueTracks[info.QueueIndex+1:]
+		}
+
+		if len(next) == 0 {
+			result.Reply = "После этого трека очередь пуста."
+			return
+		}
+
+		result.Reply = "Дальше: " + next[0].Title + " — " + next[0].Artist + "."
 		return
 	}
 
@@ -464,6 +616,41 @@ func (a *API) intentFallback(ctx context.Context, userID, message string, result
 	result.Reply = "Вот что нашёл в каталоге."
 }
 
+func preferenceIntent(value string) (string, []string) {
+	if match := dislikePattern.FindStringSubmatch(value); len(match) > 2 {
+		return "dislike", preferenceValues(match[2])
+	}
+
+	if match := likePattern.FindStringSubmatch(value); len(match) > 2 {
+		return "like", preferenceValues(match[2])
+	}
+
+	return "", nil
+}
+
+func preferenceValues(value string) []string {
+	value = strings.TrimSpace(strings.Trim(value, " .,!?;:\"'«»()[]{}"))
+	if value == "" {
+		return nil
+	}
+
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		for _, item := range strings.Split(part, " и ") {
+			item = strings.TrimSpace(strings.Trim(item, " .,!?;:\"'«»()[]{}"))
+			if item != "" {
+				result = append(result, item)
+			}
+		}
+	}
+
+	return result
+}
+
 func likesIntent(value string) bool {
 	return strings.Contains(value, "избранн") ||
 		strings.Contains(value, "любим") ||
@@ -475,8 +662,15 @@ func likesIntent(value string) bool {
 func strongIntent(value string) bool {
 	lower := strings.ToLower(value)
 
+	if kind, _ := preferenceIntent(lower); kind != "" {
+		return true
+	}
+
 	return playIntent.MatchString(lower) ||
 		likesIntent(lower) ||
+		queueIntent.MatchString(lower) ||
+		strings.Contains(lower, "часто") ||
+		strings.Contains(lower, "вечер") ||
 		parseIndex(lower) > 0 ||
 		strings.Contains(lower, "волн") ||
 		strings.Contains(lower, "пауза") ||
@@ -654,7 +848,7 @@ func cleanReply(value string) string {
 	return value
 }
 
-func assistantPrompt(info AssistantContext) string {
+func assistantPrompt(info AssistantContext, memory AssistantMemory, stats ListeningStats) string {
 	playing := "пауза"
 	if info.Playing {
 		playing = "играет"
@@ -683,6 +877,43 @@ func assistantPrompt(info AssistantContext) string {
 		}
 	}
 
+	if info.QueueIndex+1 < len(info.QueueTracks) {
+		context.WriteString("\nДалее в очереди:")
+		next := info.QueueTracks[info.QueueIndex+1:]
+		for index, item := range next {
+			if index >= 8 {
+				break
+			}
+			fmt.Fprintf(&context, "\n%d. %s — %s", index+1, item.Title, item.Artist)
+		}
+	}
+
+	if len(memory.Likes) > 0 {
+		fmt.Fprintf(&context, "\nПользователь любит: %s.", strings.Join(memory.Likes, ", "))
+	}
+
+	if len(memory.Dislikes) > 0 {
+		fmt.Fprintf(&context, "\nПользователь не любит и просил не ставить: %s.", strings.Join(memory.Dislikes, ", "))
+	}
+
+	if len(memory.Notes) > 0 {
+		fmt.Fprintf(&context, "\nЗаметки о вкусах: %s.", strings.Join(memory.Notes, ", "))
+	}
+
+	if len(stats.TopArtists) > 0 {
+		fmt.Fprintf(&context, "\nЧасто слушает исполнителей: %s.", strings.Join(stats.TopArtists, ", "))
+	}
+
+	if len(stats.Evening) > 0 {
+		context.WriteString("\nЧасто слушает вечером:")
+		for index, item := range stats.Evening {
+			if index >= 4 {
+				break
+			}
+			fmt.Fprintf(&context, "\n%d. %s — %s", index+1, item.Title, item.Artist)
+		}
+	}
+
 	if info.Attachment != nil {
 		attachment := info.Attachment
 
@@ -701,20 +932,30 @@ func assistantPrompt(info AssistantContext) string {
 
 	return fmt.Sprintf(`Ты — голосовой ассистент музыкального приложения yuicry. Отвечай по-русски, кратко и по делу, без markdown и эмодзи.
 
-Ты помогаешь с музыкой: советуешь треки, исполнителей, альбомы и жанры, объясняешь, что играет, управляешь плеером и ищешь информацию.
+Ты помогаешь с музыкой: советуешь треки, исполнителей, альбомы и жанры, объясняешь, что играет, управляешь плеером, очередью и ищешь информацию.
 
 У тебя есть инструменты:
-- search_tracks — найти треки в каталоге. Вызывай, когда просят посоветовать музыку, показать треки или найти похожее.
-- play_tracks — найти и сразу включить музыку. Вызывай, когда просят включить, поставить или сыграть трек.
-- player_action — пауза, продолжение, следующий, предыдущий, лайк, моя волна, избранное, трек по номеру.
-- search_web — поиск информации в интернете: биографии, факты, новости.
+- search_tracks — найти треки в каталоге.
+- play_tracks — найти и сразу включить музыку.
+- queue_tracks — найти треки и поставить следующими в очередь.
+- player_action — пауза, продолжение, следующий, предыдущий, лайк, волна, избранное, трек по номеру, убрать текущий, повторить, перемешать, сохранить очередь, показать очередь.
+- remember_preference — запомнить, что пользователь любит или не любит.
+- search_web — поиск информации в интернете.
 
 Правила:
-- Если пользователь просит включить музыку, обязательно вызови play_tracks.
-- Если просит посоветовать или показать треки, вызови search_tracks.
-- Если просит «мои избранные», «любимые» или «лайки», вызови player_action с action=play_likes или show_likes.
-- Если просит «трек номер N», вызови player_action с action=play_index и index=N.
-- Если спрашивает факты, биографию, историю или новости, вызови search_web.
+- «Включи/поставь/сыграй X» — play_tracks.
+- «Посоветуй/покажи/найди X» — search_tracks.
+- «Поставь следующим X» — queue_tracks.
+- «Убери этот трек» — player_action remove_current.
+- «Повтори этот трек» — player_action repeat.
+- «Перемешай очередь» — player_action shuffle.
+- «Сохрани очередь как плейлист» — player_action save_queue, при необходимости title.
+- «Что играет после этого / что дальше» — ответь по списку очереди из контекста.
+- «Мои избранные» — player_action show_likes; «включи избранные» — play_likes.
+- «Трек номер N» — player_action play_index.
+- Если пользователь говорит «мне нравится…» или «не ставь…», вызови remember_preference.
+- Если просит «что я часто слушаю вечером», используй статистику из контекста; если просит включить — play_tracks с самым частым треком/исполнителем.
+- Если спрашивает факты, биографию, историю или новости — search_web.
 - Если инструмент вернул пусто, попробуй более простой запрос или честно скажи, что не нашёл.
 - Не выдумывай факты, длительности, годы и подробности, если не уверен.
 - Не используй markdown, звёздочки и оформление списков.
@@ -750,6 +991,14 @@ func sanitizeContext(value AssistantContext) AssistantContext {
 
 	for index, item := range value.LastTracks {
 		value.LastTracks[index] = strings.TrimSpace(item)
+	}
+
+	if len(value.QueueTracks) > 30 {
+		value.QueueTracks = value.QueueTracks[:30]
+	}
+
+	if value.QueueIndex < 0 {
+		value.QueueIndex = 0
 	}
 
 	if value.Attachment != nil {

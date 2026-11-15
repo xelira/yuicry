@@ -16,12 +16,16 @@ import {
   Play,
   Settings as SettingsIcon,
   Sun,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
+import AssistantIcon from "@/components/AssistantIcon";
 import AccentPicker from "@/components/settings/AccentPicker";
 import { avatarSource } from "@/lib/avatar";
 import { useAccentColor } from "@/lib/useAccentColor";
 import { backgrounds, useAppearance, type BackgroundId } from "@/store/appearanceStore";
+import { useAssistant } from "@/store/assistantStore";
 import { useSettings } from "@/store/settingsStore";
 
 type Profile = {
@@ -87,6 +91,12 @@ export default function Settings({ profile, theme, onToggleTheme, onLogout }: Pr
   const background = useAppearance((state) => state.background);
   const setBackground = useAppearance((state) => state.setBackground);
   const current = backgrounds.find((item) => item.id === background) ?? backgrounds[0];
+  const voice = useAssistant((state) => state.voice);
+  const voiceName = useAssistant((state) => state.voiceName);
+  const rate = useAssistant((state) => state.rate);
+  const setVoice = useAssistant((state) => state.setVoice);
+  const setVoiceName = useAssistant((state) => state.setVoiceName);
+  const setRate = useAssistant((state) => state.setRate);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const accent = useAccentColor();
@@ -367,6 +377,75 @@ export default function Settings({ profile, theme, onToggleTheme, onLogout }: Pr
                 <Sun size={14} />
                 Светлая
               </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-[28px] border border-line bg-bg/85 p-5 shadow-lift backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2 text-accent">
+              <AssistantIcon size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[15px] font-medium tracking-tight">Ассистент</h2>
+              <p className="mt-0.5 text-[12px] text-muted">Голос и озвучка ответов.</p>
+            </div>
+            <button
+              onClick={() => setVoice(!voice)}
+              aria-pressed={voice}
+              aria-label={voice ? "Выключить озвучку" : "Включить озвучку"}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                voice
+                  ? "border-accent/50 bg-accent/10 text-accent"
+                  : "border-line text-muted hover:border-lineStrong hover:text-ink"
+              }`}
+            >
+              {voice ? <Volume2 size={17} /> : <VolumeX size={17} />}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-[11px] text-muted">Голос</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {[
+                  { id: "svetlana" as const, label: "Светлана" },
+                  { id: "dmitry" as const, label: "Дмитрий" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setVoiceName(item.id)}
+                    aria-pressed={voiceName === item.id}
+                    className={`rounded-xl border px-3 py-2.5 text-[12px] transition-colors ${
+                      voiceName === item.id
+                        ? "border-accent/60 bg-accent/10 text-accent"
+                        : "border-line text-muted hover:border-lineStrong hover:text-ink"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] text-muted">Скорость речи</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {[0.9, 1, 1.1].map((value) => (
+                  <button
+                    key={value}
+                    onClick={() => setRate(value)}
+                    aria-pressed={Math.abs(rate - value) < 0.01}
+                    className={`rounded-xl border px-2 py-2.5 text-[12px] tabular-nums transition-colors ${
+                      Math.abs(rate - value) < 0.01
+                        ? "border-accent/60 bg-accent/10 text-accent"
+                        : "border-line text-muted hover:border-lineStrong hover:text-ink"
+                    }`}
+                  >
+                    {value.toFixed(1)}×
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

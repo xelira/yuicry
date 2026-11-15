@@ -149,6 +149,14 @@ paths:
                           type: string
                         count:
                           type: integer
+                    queue_tracks:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/Track"
+                    queue_index:
+                      type: integer
+                    voice:
+                      type: boolean
       responses:
         "200":
           description: Ответ ассистента
@@ -161,9 +169,20 @@ paths:
                     type: string
                   action:
                     type: string
-                    enum: [none, play, pause, resume, next, previous, like, wave, play_likes, show_likes, play_index]
+                    enum: [none, play, pause, resume, next, previous, like, wave, play_likes, show_likes, play_index, queue_next, remove_current, repeat, shuffle, queue_saved, confirm]
                   index:
                     type: integer
+                  suggestion:
+                    type: string
+                  playlist:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      count:
+                        type: integer
                   tracks:
                     type: array
                     items:
@@ -221,6 +240,19 @@ paths:
           schema:
             type: string
             maxLength: 600
+        - name: voice
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [svetlana, dmitry]
+        - name: rate
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 0.8
+            maximum: 1.2
       responses:
         "200":
           description: MP3 с озвучкой

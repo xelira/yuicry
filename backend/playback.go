@@ -59,6 +59,10 @@ func (a *API) handleSavePlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if body.Playing {
+		_ = a.Store.RecordListen(current.UserID, body.Track)
+	}
+
 	a.Playback.Publish(current.UserID, state)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

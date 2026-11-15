@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -52,6 +53,7 @@ var migrations = []migration{
 	{2, addAlbumCover},
 	{3, addTrackMetadata},
 	{4, addReactionMetadata},
+	{5, addAssistantTables},
 }
 
 func (s *Store) migrate() error {
@@ -195,6 +197,35 @@ func addReactionMetadata(tx *sql.Tx) error {
 		{"album", "text not null default ''"},
 		{"album_id", "text not null default ''"},
 	})
+}
+
+func addAssistantTables(tx *sql.Tx) error {
+	schema := `
+create table if not exists assistant_memory (
+	user_id text primary key,
+	data text not null,
+	updated_at integer not null
+);
+
+create table if not exists listening_history (
+	id integer primary key autoincrement,
+	user_id text not null,
+	track_id text not null,
+	title text not null default '',
+	artist text not null default '',
+	artist_id text not null default '',
+	album text not null default '',
+	album_id text not null default '',
+	cover text not null default '',
+	duration integer not null default 0,
+	hour integer not null default 0,
+	played_at integer not null
+);
+
+create index if not exists listening_user_time on listening_history (user_id, played_at);
+`
+	_, err := tx.Exec(schema)
+	return err
 }
 
 func ensureColumns(tx *sql.Tx, table string, columns []column) error {
@@ -578,6 +609,177 @@ type PlaybackState struct {
 	Position  float64 `json:"position"`
 	Playing   bool    `json:"playing"`
 	UpdatedAt int64   `json:"updated_at"`
+}
+
+type AssistantMemory struct {
+	Likes    []string `json:"likes"`
+	Dislikes []string `json:"dislikes"`
+	Notes    []string `json:"notes"`
+}
+
+func (s *Store) AssistantMemory(userID string) (AssistantMemory, error) {
+	var memory AssistantMemory
+	var data string
+
+	err := s.db.QueryRow(`select data from assistant_memory where user_id = ?`, userID).Scan(&data)
+	if err == sql.ErrNoRows {
+		return memory, nil
+	}
+	if err != nil {
+		return memory, err
+	}
+
+	if err := json.Unmarshal([]byte(data), &memory); err != nil {
+		return AssistantMemory{}, err
+	}
+
+	return memory, nil
+}
+
+func (s *Store) SaveAssistantMemory(userID string, memory AssistantMemory) error {
+	data, err := json.Marshal(memory)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(
+		`insert into assistant_memory (user_id, data, updated_at) values (?, ?, ?)
+		 on conflict (user_id) do update set data = excluded.data, updated_at = excluded.updated_at`,
+		userID, string(data), time.Now().Unix(),
+	)
+	return err
+}
+
+func (s *Store) RememberPreference(userID, kind, value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	memory, err := s.AssistantMemory(userID)
+	if err != nil {
+		return err
+	}
+
+	var values *[]string
+
+	switch kind {
+	case "like":
+		values = &memory.Likes
+	case "dislike":
+		values = &memory.Dislikes
+	case "note":
+		values = &memory.Notes
+	default:
+		return nil
+	}
+
+	for _, item := range *values {
+		if strings.EqualFold(item, value) {
+			return nil
+		}
+	}
+
+	*values = append(*values, value)
+	if len(*values) > 20 {
+		*values = (*values)[len(*values)-20:]
+	}
+
+	return s.SaveAssistantMemory(userID, memory)
+}
+
+func (s *Store) RecordListen(userID string, track Track) error {
+	if userID == "" || track.ID == "" {
+		return nil
+	}
+
+	now := time.Now()
+	var last int64
+
+	err := s.db.QueryRow(
+		`select played_at from listening_history where user_id = ? and track_id = ? order by played_at desc limit 1`,
+		userID, track.ID,
+	).Scan(&last)
+
+	if err == nil && now.Unix()-last < 600 {
+		return nil
+	}
+
+	_, err = s.db.Exec(
+		`insert into listening_history
+		 (user_id, track_id, title, artist, artist_id, album, album_id, cover, duration, hour, played_at)
+		 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID, track.ID, track.Title, track.Artist, track.ArtistID,
+		track.Album, track.AlbumID, track.Cover, track.Duration, now.Hour(), now.Unix(),
+	)
+	return err
+}
+
+type ListeningStats struct {
+	TopArtists []string
+	TopTracks  []Track
+	Evening    []Track
+}
+
+func (s *Store) ListeningStats(userID string) ListeningStats {
+	var stats ListeningStats
+	cutoff := time.Now().AddDate(0, 0, -30).Unix()
+
+	rows, err := s.db.Query(
+		`select artist, count(*) from listening_history
+		 where user_id = ? and played_at > ? and artist != ''
+		 group by artist order by count(*) desc limit 5`,
+		userID, cutoff,
+	)
+	if err == nil {
+		for rows.Next() {
+			var artist string
+			var count int
+			if rows.Scan(&artist, &count) == nil {
+				stats.TopArtists = append(stats.TopArtists, artist)
+			}
+		}
+		rows.Close()
+	}
+
+	stats.TopTracks = s.listeningTracks(userID, cutoff, false, 8)
+	stats.Evening = s.listeningTracks(userID, cutoff, true, 5)
+
+	return stats
+}
+
+func (s *Store) listeningTracks(userID string, cutoff int64, evening bool, limit int) []Track {
+	where := `user_id = ? and played_at > ?`
+	if evening {
+		where += ` and hour >= 18 and hour <= 23`
+	}
+
+	rows, err := s.db.Query(
+		`select track_id, title, artist, artist_id, album, album_id, cover, duration, count(*) as plays, max(played_at) as last
+		 from listening_history where `+where+`
+		 group by track_id order by plays desc, last desc limit ?`,
+		userID, cutoff, limit,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var tracks []Track
+	for rows.Next() {
+		var track Track
+		var plays int
+		var last int64
+		if rows.Scan(
+			&track.ID, &track.Title, &track.Artist, &track.ArtistID,
+			&track.Album, &track.AlbumID, &track.Cover, &track.Duration,
+			&plays, &last,
+		) == nil {
+			tracks = append(tracks, track)
+		}
+	}
+
+	return tracks
 }
 
 func (s *Store) SavePlayback(userID string, state PlaybackState) error {

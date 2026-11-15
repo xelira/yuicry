@@ -146,7 +146,7 @@ func TestAssistantPromptIncludesAttachment(t *testing.T) {
 			Count:  2,
 			Tracks: []string{"Xtal — Aphex Twin", "Avril 14th — Aphex Twin"},
 		},
-	})
+	}, AssistantMemory{}, ListeningStats{})
 
 	for _, value := range []string{"Xtal", "Последний показанный список", "Вечер", "1. Xtal"} {
 		if !strings.Contains(prompt, value) {
@@ -207,5 +207,60 @@ func TestAssistantRateLimitCounts(t *testing.T) {
 
 	if atomic.LoadInt32(&hits) != 2 {
 		t.Fatalf("запросов %d", hits)
+	}
+}
+
+func TestPreferenceIntent(t *testing.T) {
+	kind, values := preferenceIntent("мне нравится IDM и джаз")
+	if kind != "like" || len(values) != 2 || values[0] != "IDM" || values[1] != "джаз" {
+		t.Fatalf("получено %s %v", kind, values)
+	}
+
+	kind, values = preferenceIntent("не ставь регги")
+	if kind != "dislike" || len(values) != 1 || values[0] != "регги" {
+		t.Fatalf("получено %s %v", kind, values)
+	}
+}
+
+func TestVoiceHotWordMatch(t *testing.T) {
+	corrected, score := hotWordMatch("включи апхекс твин", []string{"Aphex Twin", "Boards of Canada"})
+	if score < 0.55 {
+		t.Fatalf("низкая уверенность: %f", score)
+	}
+
+	if corrected != "включи Aphex Twin" {
+		t.Fatalf("получено %q", corrected)
+	}
+}
+
+func TestPhoneticScore(t *testing.T) {
+	if score := phoneticScore("апхекс твин", "Aphex Twin"); score < 0.55 {
+		t.Fatalf("низкое совпадение: %f", score)
+	}
+
+	if score := phoneticScore("апхекс твин", "Boards of Canada"); score > 0.4 {
+		t.Fatalf("ложное совпадение: %f", score)
+	}
+}
+
+func TestUserQuestionStripsAttachment(t *testing.T) {
+	value := userQuestion("[Вложение: плейлист «Вечер» (2 трека)]\nчто за плейлист?")
+	if value != "что за плейлист?" {
+		t.Fatalf("получено %q", value)
+	}
+}
+
+func TestSanitizeContextCapsQueue(t *testing.T) {
+	tracks := make([]Track, 40)
+	for index := range tracks {
+		tracks[index] = Track{ID: string(rune('a' + index%26))}
+	}
+
+	value := sanitizeContext(AssistantContext{QueueTracks: tracks, QueueIndex: -3})
+	if len(value.QueueTracks) != 30 {
+		t.Fatalf("очередь не обрезана: %d", len(value.QueueTracks))
+	}
+	if value.QueueIndex != 0 {
+		t.Fatalf("индекс очереди %d", value.QueueIndex)
 	}
 }

@@ -11,7 +11,13 @@ export type AssistantAction =
   | "wave"
   | "play_likes"
   | "show_likes"
-  | "play_index";
+  | "play_index"
+  | "queue_next"
+  | "remove_current"
+  | "repeat"
+  | "shuffle"
+  | "queue_saved"
+  | "confirm";
 
 export type AssistantSource = {
   title: string;
@@ -40,6 +46,9 @@ export type AssistantContext = {
   likes: number;
   last_tracks: string[];
   attachment: AssistantAttachment | null;
+  queue_tracks: Track[];
+  queue_index: number;
+  voice: boolean;
 };
 
 export type AssistantAnswer = {
@@ -48,6 +57,8 @@ export type AssistantAnswer = {
   index: number;
   tracks: Track[];
   sources: AssistantSource[];
+  suggestion: string;
+  playlist: { id: string; title: string; count: number } | null;
 };
 
 const actions: AssistantAction[] = [
@@ -62,16 +73,24 @@ const actions: AssistantAction[] = [
   "play_likes",
   "show_likes",
   "play_index",
+  "queue_next",
+  "remove_current",
+  "repeat",
+  "shuffle",
+  "queue_saved",
+  "confirm",
 ];
 
 export async function askAssistant(
   messages: AssistantChatMessage[],
   context: AssistantContext,
+  signal?: AbortSignal,
 ): Promise<AssistantAnswer> {
   const response = await fetch("/api/assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, context }),
+    signal,
   });
 
   if (response.status === 429) throw new Error("Слишком много запросов. Подожди минуту.");
@@ -90,5 +109,7 @@ export async function askAssistant(
     index: Number(data.index) || 0,
     tracks: Array.isArray(data.tracks) ? (data.tracks as Track[]) : [],
     sources,
+    suggestion: String(data.suggestion ?? ""),
+    playlist: data.playlist ?? null,
   };
 }

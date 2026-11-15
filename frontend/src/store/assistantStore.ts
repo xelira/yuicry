@@ -10,6 +10,7 @@ export type AssistantMessage = {
   tracks?: Track[];
   sources?: AssistantSource[];
   attachment?: AssistantAttachment;
+  suggestion?: string;
   failed?: boolean;
 };
 
@@ -20,16 +21,22 @@ type AssistantState = {
   busy: boolean;
   listening: boolean;
   voice: boolean;
+  voiceName: "svetlana" | "dmitry";
+  rate: number;
   attachment: AssistantAttachment | null;
   setOpen: (open: boolean) => void;
   setExpanded: (expanded: boolean) => void;
   setBusy: (busy: boolean) => void;
   setListening: (listening: boolean) => void;
   setVoice: (voice: boolean) => void;
+  setVoiceName: (voiceName: "svetlana" | "dmitry") => void;
+  setRate: (rate: number) => void;
   attach: (attachment: AssistantAttachment) => void;
   detach: () => void;
   addMessage: (message: Omit<AssistantMessage, "id">) => void;
   clear: () => void;
+  truncate: (length: number) => void;
+  restore: (messages: AssistantMessage[]) => void;
 };
 
 function messageID() {
@@ -44,13 +51,40 @@ export const useAssistant = create<AssistantState>((set) => ({
   busy: false,
   listening: false,
   voice: true,
+  voiceName: "svetlana",
+  rate: 1,
   attachment: null,
 
   setOpen: (open) => set(open ? { open } : { open, expanded: false }),
   setExpanded: (expanded) => set({ expanded }),
   setBusy: (busy) => set({ busy }),
   setListening: (listening) => set({ listening }),
-  setVoice: (voice) => set({ voice }),
+  setVoice: (voice) => {
+    set({ voice });
+    try {
+      localStorage.setItem("yuicry:assistant-voice", voice ? "1" : "0");
+    } catch (error) {
+      return;
+    }
+  },
+
+  setVoiceName: (voiceName) => {
+    set({ voiceName });
+    try {
+      localStorage.setItem("yuicry:assistant-voice-name", voiceName);
+    } catch (error) {
+      return;
+    }
+  },
+
+  setRate: (rate) => {
+    set({ rate });
+    try {
+      localStorage.setItem("yuicry:assistant-rate", String(rate));
+    } catch (error) {
+      return;
+    }
+  },
 
   attach: (attachment) => set({ attachment, open: true, expanded: true }),
   detach: () => set({ attachment: null }),
@@ -61,4 +95,8 @@ export const useAssistant = create<AssistantState>((set) => ({
     })),
 
   clear: () => set({ messages: [], busy: false, listening: false }),
+  truncate: (length) =>
+    set((state) => ({ messages: state.messages.slice(0, Math.max(0, length)) })),
+
+  restore: (messages) => set({ messages: messages.slice(-40) }),
 }));

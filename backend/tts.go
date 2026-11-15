@@ -24,7 +24,18 @@ func (a *API) handleTTS(w http.ResponseWriter, r *http.Request) {
 		text = string(runes[:600])
 	}
 
-	endpoint := env("TTS_URL", "http://127.0.0.1:8790") + "/tts?text=" + url.QueryEscape(text)
+	query := url.Values{}
+	query.Set("text", text)
+
+	if voice := strings.TrimSpace(r.URL.Query().Get("voice")); voice == "svetlana" || voice == "dmitry" {
+		query.Set("voice", voice)
+	}
+
+	if rate := strings.TrimSpace(r.URL.Query().Get("rate")); rate != "" {
+		query.Set("rate", rate)
+	}
+
+	endpoint := env("TTS_URL", "http://127.0.0.1:8790") + "/tts?" + query.Encode()
 	request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "озвучка недоступна"})

@@ -1,6 +1,7 @@
 "use client";
 
-import { Maximize2, Mic, MicOff, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Maximize2, Mic, MicOff, Square, X } from "lucide-react";
 
 import AssistantIcon from "@/components/AssistantIcon";
 import { coverSource } from "@/lib/audio";
@@ -19,9 +20,36 @@ type Props = {
   attachment: AssistantAttachment | null;
   available: boolean;
   onMic: () => void;
+  onStop: () => void;
   onExpand: () => void;
   onHide: () => void;
 };
+
+const positionKey = "yuicry:assistant-island";
+
+type Position = { x: number; y: number };
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function readPosition(): Position | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(positionKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Position;
+    if (!Number.isFinite(parsed.x) || !Number.isFinite(parsed.y)) return null;
+
+    return {
+      x: clamp(parsed.x, 90, window.innerWidth - 90),
+      y: clamp(parsed.y, 8, window.innerHeight - 70),
+    };
+  } catch (error) {
+    return null;
+  }
+}
 
 export default function AssistantIsland({
   busy,
@@ -33,9 +61,120 @@ export default function AssistantIsland({
   attachment,
   available,
   onMic,
+  onStop,
   onExpand,
   onHide,
 }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<Position | null>(() => readPosition());
+  const positionRef = useRef(position);
+  const drag = useRef<{
+    startX: number;
+    startY: number;
+    centerX: number;
+    centerY: number;
+    moved: boolean;
+  } | null>(null);
+  const moved = useRef(false);
+
+  positionRef.current = position;
+
+  useEffect(() => {
+    if (!position) return;
+
+    const update = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      const width = rect?.width ?? 320;
+      setPosition((value) =>
+        value
+          ? {
+              x: clamp(value.x, width / 2 + 8, window.innerWidth - width / 2 - 8),
+              y: clamp(value.y, 8, window.innerHeight - 70),
+            }
+          : value,
+      );
+    };
+
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    update();
+
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [Boolean(position)]);
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("button")) return;
+
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    drag.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      centerX: rect.left + rect.width / 2,
+      centerY: rect.top + rect.height / 2,
+      moved: false,
+    };
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch (error) {
+      return;
+    }
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const value = drag.current;
+    if (!value) return;
+
+    const dx = event.clientX - value.startX;
+    const dy = event.clientY - value.startY;
+
+    if (!value.moved && Math.hypot(dx, dy) > 4) value.moved = true;
+    if (!value.moved) return;
+
+    event.preventDefault();
+
+    const rect = ref.current?.getBoundingClientRect();
+    const width = rect?.width ?? 320;
+
+    const next = {
+      x: clamp(value.centerX + dx, width / 2 + 8, window.innerWidth - width / 2 - 8),
+      y: clamp(value.centerY + dy, 8, window.innerHeight - 70),
+    };
+
+    positionRef.current = next;
+    setPosition(next);
+  };
+
+  const onPointerUp = () => {
+    const value = drag.current;
+    drag.current = null;
+
+    if (!value?.moved) return;
+
+    moved.current = true;
+    if (positionRef.current) {
+      try {
+        localStorage.setItem(positionKey, JSON.stringify(positionRef.current));
+      } catch (error) {
+        return;
+      }
+    }
+
+    window.setTimeout(() => {
+      moved.current = false;
+    }, 300);
+  };
+
+  const expand = () => {
+    if (moved.current) return;
+    onExpand();
+  };
+
   const title = listening
     ? status || "Слушаю…"
     : busy
@@ -67,21 +206,35 @@ export default function AssistantIsland({
                 : "Голосовой помощник";
 
   return (
-    <div className="fixed left-1/2 top-[calc(8px+var(--inset-top,0px))] z-[60] w-fit max-w-[calc(100vw-24px)] -translate-x-1/2 animate-[island-in_.28s_cubic-bezier(.22,1,.36,1)] sm:max-w-[560px]">
-      <div
-        onDoubleClick={onExpand}
-        className="flex items-center gap-2 rounded-[22px] border border-line bg-surface/95 py-1.5 pl-1.5 pr-1 shadow-lift backdrop-blur-xl"
-      >
+    <div
+      ref={ref}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        drag.current = null;
+      }}
+      onDoubleClick={expand}
+      style={
+        position
+          ? { left: position.x, top: position.y, transform: "translateX(-50%)" }
+          : undefined
+      }
+      className={`fixed z-[60] w-fit max-w-[calc(100vw-24px)] touch-none select-none animate-[island-in_.28s_cubic-bezier(.22,1,.36,1)] sm:max-w-[560px] ${
+        position
+          ? ""
+          : "left-1/2 top-[calc(8px+var(--inset-top,0px))] -translate-x-1/2"
+      }`}
+    >
+      <div className="flex items-center gap-2 rounded-[22px] border border-line bg-surface/95 py-1.5 pl-1.5 pr-1 shadow-lift backdrop-blur-xl">
         <span
-          onDoubleClick={onExpand}
-          className="flex h-8 w-8 shrink-0 cursor-default items-center justify-center rounded-full border border-line bg-bg text-ink"
+          className="flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-full border border-line bg-bg text-ink active:cursor-grabbing"
         >
           <AssistantIcon size={17} />
         </span>
 
         <div
-          onDoubleClick={onExpand}
-          className="min-w-0 max-w-[190px] cursor-default sm:max-w-[300px]"
+          className="min-w-0 max-w-[190px] cursor-grab sm:max-w-[300px] active:cursor-grabbing"
           aria-live="polite"
         >
           <div className="flex items-center gap-1.5">

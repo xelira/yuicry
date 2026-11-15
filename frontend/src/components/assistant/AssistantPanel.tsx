@@ -7,6 +7,7 @@ import {
   MicOff,
   Minimize2,
   RotateCcw,
+  Square,
   Volume2,
   VolumeX,
   X,
@@ -40,6 +41,9 @@ type Props = {
   onCollapse: () => void;
   onHide: () => void;
   onPlay: (tracks: Track[], index: number) => void;
+  onSuggestion: (value: string) => void;
+  onStop: () => void;
+  onRetry: () => void;
 };
 
 const suggestions = [
@@ -69,6 +73,9 @@ export default function AssistantPanel({
   onCollapse,
   onHide,
   onPlay,
+  onSuggestion,
+  onStop,
+  onRetry,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -83,6 +90,10 @@ export default function AssistantPanel({
 
     box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
   }, [messages.length, busy, attachment]);
+
+  const lastAssistantID = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant")?.id;
 
   return (
     <div
@@ -192,7 +203,13 @@ export default function AssistantPanel({
           ) : (
             <div className="flex flex-col gap-4">
               {messages.map((message) => (
-                <AssistantMessageView key={message.id} message={message} onPlay={onPlay} />
+                <AssistantMessageView
+                  key={message.id}
+                  message={message}
+                  onPlay={onPlay}
+                  onSuggestion={onSuggestion}
+                  onRetry={message.id === lastAssistantID ? onRetry : undefined}
+                />
               ))}
             </div>
           )}
@@ -301,14 +318,24 @@ export default function AssistantPanel({
               </button>
             )}
 
-            <button
-              onClick={() => onSend()}
-              disabled={!input.trim() || busy}
-              aria-label="Отправить"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accentText transition hover:brightness-110 disabled:opacity-40"
-            >
-              <ArrowUp size={19} />
-            </button>
+            {busy ? (
+              <button
+                onClick={onStop}
+                aria-label="Остановить ответ"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accentText transition hover:brightness-110"
+              >
+                <Square size={14} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={() => onSend()}
+                disabled={!input.trim()}
+                aria-label="Отправить"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accentText transition hover:brightness-110 disabled:opacity-40"
+              >
+                <ArrowUp size={19} />
+              </button>
+            )}
           </div>
         </div>
       </aside>

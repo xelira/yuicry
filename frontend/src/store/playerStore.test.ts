@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const audio = {
+  currentTime: 0,
+  pause: vi.fn(),
+  removeAttribute: vi.fn(),
+  play: vi.fn(() => Promise.resolve()),
+};
+
 vi.mock("@/lib/audio", () => ({
   playTrack: vi.fn(),
   warmTrack: vi.fn(),
+  audioElement: () => audio,
 }));
 
 import { playTrack } from "@/lib/audio";
@@ -152,6 +160,42 @@ describe("playerStore", () => {
 
     expect(usePlayer.getState().fullscreen).toBe(false);
     expect(usePlayer.getState().lyricsOpen).toBe(false);
+  });
+
+  it("ставит треки следующими в очередь", () => {
+    usePlayer.getState().playQueue([track("1"), track("2")], 0);
+    usePlayer.getState().queueNext([track("3"), track("1")]);
+
+    expect(usePlayer.getState().queue.map((item) => item.id)).toEqual(["1", "3", "2"]);
+  });
+
+  it("убирает текущий трек и включает следующий", () => {
+    usePlayer.getState().playQueue([track("1"), track("2"), track("3")], 1);
+    usePlayer.getState().removeCurrent();
+
+    const state = usePlayer.getState();
+    expect(state.queue.map((item) => item.id)).toEqual(["1", "3"]);
+    expect(state.index).toBe(1);
+    expect(playTrack).toHaveBeenLastCalledWith("3");
+  });
+
+  it("перемешивает очередь, оставляя текущий трек первым", () => {
+    usePlayer.getState().playQueue([track("1"), track("2"), track("3")], 1);
+    usePlayer.getState().shuffleQueue();
+
+    const state = usePlayer.getState();
+    expect(state.queue[0].id).toBe("2");
+    expect(state.index).toBe(0);
+    expect(state.queue).toHaveLength(3);
+  });
+
+  it("повторяет текущий трек с начала", () => {
+    usePlayer.getState().playQueue([track("1")], 0);
+    audio.currentTime = 42;
+    usePlayer.getState().repeatCurrent();
+
+    expect(audio.currentTime).toBe(0);
+    expect(audio.play).toHaveBeenCalled();
   });
 
   it("подтягивает избранное", async () => {

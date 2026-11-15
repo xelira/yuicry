@@ -8,16 +8,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import edge_tts
 
-VOICE = "ru-RU-SvetlanaNeural"
+VOICES = {
+    "svetlana": "ru-RU-SvetlanaNeural",
+    "dmitry": "ru-RU-DmitryNeural",
+}
 TTL = 3600
 LIMIT = 128
 
 CACHE = {}
 
 
-def synthesize(text):
+def synthesize(text, voice, rate):
     async def run():
-        communicate = edge_tts.Communicate(text, VOICE)
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
         chunks = bytearray()
 
         async for chunk in communicate.stream():
@@ -47,7 +50,19 @@ class Handler(BaseHTTPRequestHandler):
         if len(text) > 600:
             text = text[:600]
 
-        key = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        voice = VOICES.get((params.get("voice") or ["svetlana"])[0], VOICES["svetlana"])
+        rate_value = (params.get("rate") or ["1"])[0]
+
+        try:
+            rate_number = float(rate_value)
+        except ValueError:
+            rate_number = 1.0
+
+        rate_number = max(0.8, min(1.2, rate_number))
+        percent = round((rate_number - 1) * 100)
+        rate = f"{percent:+d}%"
+
+        key = hashlib.sha256(f"{voice}|{rate}|{text}".encode("utf-8")).hexdigest()
         now = time.time()
         entry = CACHE.get(key)
 
@@ -55,7 +70,7 @@ class Handler(BaseHTTPRequestHandler):
             data = entry[1]
         else:
             try:
-                data = synthesize(text)
+                data = synthesize(text, voice, rate)
             except Exception:
                 self.send_error(502)
                 return

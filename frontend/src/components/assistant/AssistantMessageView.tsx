@@ -1,6 +1,7 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { useState } from "react";
+import { Check, Copy, Play, RotateCcw } from "lucide-react";
 
 import AssistantIcon from "@/components/AssistantIcon";
 import { coverSource } from "@/lib/audio";
@@ -11,9 +12,28 @@ import type { Track } from "@/store/playerStore";
 type Props = {
   message: AssistantMessage;
   onPlay: (tracks: Track[], index: number) => void;
+  onSuggestion?: (value: string) => void;
+  onRetry?: () => void;
 };
 
-export default function AssistantMessageView({ message, onPlay }: Props) {
+export default function AssistantMessageView({
+  message,
+  onPlay,
+  onSuggestion,
+  onRetry,
+}: Props) {
+  const [dismissed, setDismissed] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (error) {
+      return;
+    }
+  };
   if (message.role === "user") {
     return (
       <div className="flex flex-col items-end gap-1.5">
@@ -66,6 +86,23 @@ export default function AssistantMessageView({ message, onPlay }: Props) {
           {message.text}
         </p>
 
+        {message.suggestion && !dismissed && onSuggestion && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              onClick={() => onSuggestion(message.suggestion!)}
+              className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1.5 text-[11px] text-accent transition-colors hover:bg-accent/15"
+            >
+              Да, про {message.suggestion}
+            </button>
+            <button
+              onClick={() => setDismissed(true)}
+              className="rounded-full border border-line px-3 py-1.5 text-[11px] text-muted transition-colors hover:text-ink"
+            >
+              Нет
+            </button>
+          </div>
+        )}
+
         {message.sources && message.sources.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {message.sources.slice(0, 2).map((source) => (
@@ -81,6 +118,26 @@ export default function AssistantMessageView({ message, onPlay }: Props) {
             ))}
           </div>
         )}
+
+        <div className="mt-2 flex items-center gap-1">
+          <button
+            onClick={() => void copy()}
+            aria-label="Скопировать ответ"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink"
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </button>
+
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              aria-label="Повторить ответ"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink"
+            >
+              <RotateCcw size={13} />
+            </button>
+          )}
+        </div>
 
         {message.tracks && message.tracks.length > 0 && (
           <div className="mt-3">

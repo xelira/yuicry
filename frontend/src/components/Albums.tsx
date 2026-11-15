@@ -315,6 +315,12 @@ export default function Albums({ onExplore }: Props) {
     void load();
   }, []);
 
+  useEffect(() => {
+    const refresh = () => void load();
+    window.addEventListener("yuicry:albums-changed", refresh);
+    return () => window.removeEventListener("yuicry:albums-changed", refresh);
+  }, []);
+
   const openAlbum = async (album: Album) => {
     setOpen(album);
     const response = await fetch(`/api/albums/${album.id}`);

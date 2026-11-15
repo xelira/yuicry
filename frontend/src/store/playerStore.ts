@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { playTrack } from "@/lib/audio";
+import { audioElement, playTrack } from "@/lib/audio";
 
 export type Track = {
   id: string;
@@ -43,6 +43,10 @@ type PlayerState = {
   setFollowing: (following: boolean) => void;
   setFullscreen: (fullscreen: boolean) => void;
   setLyricsOpen: (lyricsOpen: boolean) => void;
+  queueNext: (tracks: Track[]) => void;
+  removeCurrent: () => void;
+  repeatCurrent: () => void;
+  shuffleQueue: () => void;
   toggleLike: (track: Track) => Promise<void>;
   hideTrack: (track: Track) => Promise<void>;
   dislike: (track: Track) => Promise<void>;
@@ -152,6 +156,66 @@ export const usePlayer = create<PlayerState>((set, get) => ({
     set(fullscreen ? { fullscreen } : { fullscreen, lyricsOpen: false }),
 
   setLyricsOpen: (lyricsOpen) => set({ lyricsOpen }),
+
+  queueNext: (tracks) => {
+    const { queue, index } = get();
+    const incoming = unique(tracks).filter((track) => !queue.some((item) => item.id === track.id));
+
+    if (incoming.length === 0) return;
+
+    if (queue.length === 0 || index < 0) {
+      get().playQueue(incoming);
+      return;
+    }
+
+    const next = [...queue];
+    next.splice(index + 1, 0, ...incoming);
+    set({ queue: next });
+  },
+
+  removeCurrent: () => {
+    const { queue, index } = get();
+    if (index < 0 || index >= queue.length) return;
+
+    const next = queue.filter((_, position) => position !== index);
+
+    if (next.length === 0) {
+      const audio = audioElement();
+      audio.pause();
+      audio.removeAttribute("src");
+      set({ queue: [], index: -1, playing: false });
+      return;
+    }
+
+    const position = Math.min(index, next.length - 1);
+    playTrack(next[position].id);
+    set({ queue: next, index: position, playing: true });
+  },
+
+  repeatCurrent: () => {
+    const { queue, index } = get();
+    if (!queue[index]) return;
+
+    const audio = audioElement();
+    audio.currentTime = 0;
+    void audio.play().catch(() => undefined);
+    set({ playing: true });
+  },
+
+  shuffleQueue: () => {
+    const { queue, index } = get();
+    if (queue.length < 2) return;
+
+    const current = index >= 0 ? queue[index] : null;
+    const rest = queue.filter((_, position) => position !== index);
+
+    for (let position = rest.length - 1; position > 0; position -= 1) {
+      const swap = Math.floor(Math.random() * (position + 1));
+      [rest[position], rest[swap]] = [rest[swap], rest[position]];
+    }
+
+    set({ queue: current ? [current, ...rest] : rest, index: 0 });
+  },
 
   toggleLike: async (track) => {
     const liked = Boolean(get().likes[track.id]);

@@ -291,3 +291,108 @@ test("вложение уходит вместе с вопросом", async ({ 
 
   expect(body?.context?.attachment).toMatchObject({ kind: "track", title: "Found Track" });
 });
+
+test("история ассистента сохраняется", async ({ page }) => {
+  await page.route("**/api/assistant", (route) =>
+    route.fulfill({
+      json: { reply: "История на месте", action: "none", index: 0, tracks: [], sources: [] },
+    }),
+  );
+
+  await page.getByRole("button", { name: "Ассистент" }).click();
+  await page.getByRole("button", { name: "Развернуть ассистента" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await dialog.getByLabel("Вопрос ассистенту").fill("привет");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+  await expect(dialog.getByText("История на месте")).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Ассистент" }).click();
+
+  await expect(page.getByText("История на месте")).toBeVisible();
+});
+
+test("ответ можно остановить и повторить", async ({ page }) => {
+  let calls = 0;
+
+  await page.route("**/api/assistant", async (route) => {
+    calls += 1;
+
+    if (calls === 1) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+
+    try {
+      await route.fulfill({
+        json: {
+          reply: calls === 1 ? "Первый" : calls === 2 ? "Второй" : "Третий",
+          action: "none",
+          index: 0,
+          tracks: [],
+          sources: [],
+        },
+      });
+    } catch (error) {
+      // request was aborted
+    }
+  });
+
+  await page.getByRole("button", { name: "Ассистент" }).click();
+  await page.getByRole("button", { name: "Развернуть ассистента" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await dialog.getByLabel("Вопрос ассистенту").fill("привет");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+
+  await expect(dialog.getByRole("button", { name: "Остановить ответ" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Остановить ответ" }).click();
+  await expect(dialog.getByText("Остановлено.")).toBeVisible();
+
+  await dialog.getByLabel("Вопрос ассистенту").fill("привет");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+  await expect(dialog.getByText("Второй")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Повторить ответ" }).click();
+  await expect(dialog.getByText("Третий")).toBeVisible();
+});
+
+test("ассистент переспрашивает при низкой уверенности", async ({ page }) => {
+  let calls = 0;
+  let lastQuestion = "";
+
+  await page.route("**/api/assistant", (route) => {
+    calls += 1;
+    const body = route.request().postDataJSON();
+    lastQuestion = body.messages.at(-1).content;
+
+    if (calls === 1) {
+      return route.fulfill({
+        json: {
+          reply: "Ты про Aphex Twin?",
+          action: "confirm",
+          index: 0,
+          suggestion: "Aphex Twin",
+          tracks: [],
+          sources: [],
+        },
+      });
+    }
+
+    return route.fulfill({
+      json: { reply: "Включаю", action: "play", index: 0, tracks: [waveTrack], sources: [] },
+    });
+  });
+
+  await page.getByRole("button", { name: "Ассистент" }).click();
+  await page.getByRole("button", { name: "Развернуть ассистента" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await dialog.getByLabel("Вопрос ассистенту").fill("апхекс твин");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+
+  await dialog.getByRole("button", { name: "Да, про Aphex Twin" }).click();
+
+  await expect(page.getByText("Wave Track").first()).toBeVisible();
+  expect(lastQuestion).toBe("Aphex Twin");
+});

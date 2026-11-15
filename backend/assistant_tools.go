@@ -28,6 +28,7 @@ type assistantToolResult struct {
 	Index      int
 	Web        bool
 	WebResults []webResult
+	Playlist   *AssistantPlaylist
 }
 
 type webResult struct {
@@ -73,10 +74,12 @@ func assistantTools() []map[string]any {
 				"type": "string",
 				"enum": []string{
 					"pause", "resume", "next", "previous", "like", "wave",
-					"play_likes", "show_likes", "play_index",
+					"play_likes", "show_likes", "play_index", "remove_current",
+					"repeat", "shuffle", "save_queue", "queue_info",
 				},
 			},
 			"index": map[string]any{"type": "integer", "minimum": 1},
+			"title": map[string]any{"type": "string", "description": "Название плейлиста при сохранении очереди"},
 		},
 		"required": []string{"action"},
 	}
@@ -109,9 +112,32 @@ func assistantTools() []map[string]any {
 		{
 			"type": "function",
 			"function": map[string]any{
+				"name":        "queue_tracks",
+				"description": "Найти треки и поставить их следующими в очередь. Используй для «поставь следующим».",
+				"parameters":  trackQuery,
+			},
+		},
+		{
+			"type": "function",
+			"function": map[string]any{
 				"name":        "player_action",
-				"description": "Управление плеером: пауза, продолжение, следующий, предыдущий, лайк, моя волна, избранное, трек по номеру.",
+				"description": "Управление плеером: пауза, продолжение, следующий, предыдущий, лайк, моя волна, избранное, трек по номеру, убрать текущий, повторить, перемешать, сохранить очередь, показать очередь.",
 				"parameters":  action,
+			},
+		},
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "remember_preference",
+				"description": "Запомнить музыкальное предпочтение пользователя: жанр, исполнителя или заметку.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"kind":  map[string]any{"type": "string", "enum": []string{"like", "dislike", "note"}},
+						"value": map[string]any{"type": "string"},
+					},
+					"required": []string{"kind", "value"},
+				},
 			},
 		},
 		{
@@ -125,7 +151,7 @@ func assistantTools() []map[string]any {
 	}
 }
 
-func (a *API) runAssistantTool(ctx context.Context, userID string, call assistantToolCall) assistantToolResult {
+func (a *API) runAssistantTool(ctx context.Context, userID string, call assistantToolCall, info AssistantContext) assistantToolResult {
 	switch call.Function.Name {
 	case "search_tracks":
 		var args struct {
@@ -161,10 +187,31 @@ func (a *API) runAssistantTool(ctx context.Context, userID string, call assistan
 			Action:  action,
 		}
 
+	case "queue_tracks":
+		var args struct {
+			Query string `json:"query"`
+			Limit int    `json:"limit"`
+		}
+
+		_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
+		tracks := a.searchTracks(ctx, args.Query, clampLimit(args.Limit, 6))
+		action := ""
+
+		if len(tracks) > 0 {
+			action = "queue_next"
+		}
+
+		return assistantToolResult{
+			Content: trackToolContent(tracks, action),
+			Tracks:  tracks,
+			Action:  action,
+		}
+
 	case "player_action":
 		var args struct {
 			Action string `json:"action"`
 			Index  int    `json:"index"`
+			Title  string `json:"title"`
 		}
 
 		_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
@@ -175,8 +222,41 @@ func (a *API) runAssistantTool(ctx context.Context, userID string, call assistan
 			result.Tracks = a.likedTracks(userID, 10)
 		}
 
+		if action == "save_queue" {
+			playlist, err := a.saveQueuePlaylist(userID, info.QueueTracks, args.Title)
+			if err != nil {
+				result.Action = "none"
+				result.Content = `{"error":"очередь пуста"}`
+				return result
+			}
+
+			result.Action = "queue_saved"
+			result.Playlist = playlist
+			result.Content = `{"ok":true}`
+			return result
+		}
+
+		if action == "queue_info" {
+			result.Action = "none"
+			result.Content = queueToolContent(info)
+			return result
+		}
+
 		result.Content = trackToolContent(result.Tracks, action)
 		return result
+
+	case "remember_preference":
+		var args struct {
+			Kind  string `json:"kind"`
+			Value string `json:"value"`
+		}
+
+		_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
+		if err := a.Store.RememberPreference(userID, args.Kind, args.Value); err != nil {
+			return assistantToolResult{Content: `{"error":"не удалось запомнить"}`}
+		}
+
+		return assistantToolResult{Content: `{"ok":true}`}
 
 	case "search_web":
 		var args struct {
@@ -342,6 +422,51 @@ func uniqueTracks(tracks []Track) []Track {
 	return result
 }
 
+func (a *API) saveQueuePlaylist(userID string, tracks []Track, title string) (*AssistantPlaylist, error) {
+	if len(tracks) == 0 {
+		return nil, errors.New("пустая очередь")
+	}
+
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "Очередь " + time.Now().Format("02.01")
+	}
+
+	album, err := a.Store.CreateAlbum(userID, title)
+	if err != nil {
+		return nil, err
+	}
+
+	added := 0
+	for _, track := range tracks {
+		if track.ID == "" || track.Title == "" {
+			continue
+		}
+		if err := a.Store.AddAlbumTrack(userID, album.ID, track); err == nil {
+			added += 1
+		}
+	}
+
+	if added == 0 {
+		return nil, errors.New("не удалось сохранить треки")
+	}
+
+	return &AssistantPlaylist{ID: album.ID, Title: album.Title, Count: added}, nil
+}
+
+func queueToolContent(info AssistantContext) string {
+	tracks := []Track{}
+	if info.QueueIndex+1 < len(info.QueueTracks) {
+		tracks = info.QueueTracks[info.QueueIndex+1:]
+	}
+
+	data, _ := json.Marshal(map[string]any{
+		"current": info.Track,
+		"next":    compactTracks(tracks),
+	})
+	return string(data)
+}
+
 func mergeWebResults(first, second []webResult) []webResult {
 	seen := make(map[string]bool)
 	result := make([]webResult, 0, len(first)+len(second))
@@ -375,7 +500,8 @@ func clampLimit(value, fallback int) int {
 
 func normalizeAssistantAction(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "pause", "resume", "next", "previous", "like", "wave", "play_likes", "show_likes", "play_index":
+	case "pause", "resume", "next", "previous", "like", "wave", "play_likes", "show_likes", "play_index",
+		"remove_current", "repeat", "shuffle", "save_queue", "queue_info":
 		return strings.ToLower(strings.TrimSpace(value))
 	default:
 		return "none"
