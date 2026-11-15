@@ -282,14 +282,68 @@ type Scene = {
   dispose: () => void;
 };
 
+function hexToHsl(hex: string) {
+  const value = parseInt(hex.slice(1), 16);
+  const r = ((value >> 16) & 255) / 255;
+  const g = ((value >> 8) & 255) / 255;
+  const b = (value & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const delta = max - min;
+
+  let h = 0;
+  let s = 0;
+
+  if (delta !== 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+
+    if (max === r) h = ((g - b) / delta) % 6;
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+
+  return { h, s, l };
+}
+
+function hslToHex(h: number, s: number, l: number) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+
+  const channel = (value: number) =>
+    Math.max(0, Math.min(255, Math.round((value + m) * 255)))
+      .toString(16)
+      .padStart(2, "0");
+
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
+}
+
 function paletteTriple(
   colors: Palette,
   light: boolean,
+  accent: string,
 ): [[number, number, number], [number, number, number], [number, number, number]] {
-  const tint = mixHex("#ff7a33", colors[0], 0.12);
-  const warm = light ? "#d94b16" : tint;
-  const hot = light ? "#ffb072" : mixHex("#fff6e8", warm, 0.2);
-  const deep = light ? "#541103" : mixHex(warm, "#1c0503", 0.78);
+  const { h, s } = hexToHsl(accent);
+  const saturation = Math.max(0.62, Math.min(0.96, s));
+  const base = mixHex(hslToHex(h, saturation, light ? 0.44 : 0.53), "#ff6a2a", 0.22);
+  const warm = mixHex(base, colors[0], 0.08);
+  const hot = light ? mixHex("#fff0dc", warm, 0.32) : mixHex("#fff8ee", warm, 0.2);
+  const deep = mixHex(hslToHex(h, saturation, light ? 0.16 : 0.08), "#1a0504", 0.35);
 
   return [rgb(hot), rgb(warm), rgb(deep)];
 }
@@ -473,12 +527,13 @@ export default function BlackHole({ colors, light = false }: Props) {
 
 function BlackHoleScene({ colors, light = false }: Props) {
   const holderRef = useRef<HTMLDivElement>(null);
-  const targets = useRef(paletteTriple(colors, light));
+  const accent = useAccentColor();
+  const targets = useRef(paletteTriple(colors, light, accent));
   const lightTarget = useRef(light ? 1 : 0);
 
   useEffect(() => {
-    targets.current = paletteTriple(colors, light);
-  }, [colors, light]);
+    targets.current = paletteTriple(colors, light, accent);
+  }, [colors, light, accent]);
 
   useEffect(() => {
     lightTarget.current = light ? 1 : 0;
