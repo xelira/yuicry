@@ -10,62 +10,6 @@ type Options = {
   onLoaded: () => void;
 };
 
-async function loadTrack(
-  id: string,
-  signal: AbortSignal,
-  onProgress: (value: number) => void,
-) {
-  const start = await fetch(`/api/download/${id}`, { method: "POST", signal });
-
-  if (start.status === 404) {
-    const response = await fetch(streamSource(id), { signal });
-    if (!response.ok) throw new Error("stream");
-    return response.blob();
-  }
-
-  if (!start.ok) throw new Error("download");
-
-  const initial = await start.json();
-  if (initial.state === "error") throw new Error(initial.error ?? "download");
-
-  if (initial.state !== "done") {
-    await new Promise<void>((resolve, reject) => {
-      const source = new EventSource(`/api/download/${id}/events`);
-
-      const close = (error?: Error) => {
-        source.close();
-        if (error) reject(error);
-        else resolve();
-      };
-
-      source.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.total > 0) {
-            onProgress(Math.min(99, Math.round((data.bytes / data.total) * 100)));
-          }
-
-          if (data.state === "done") close();
-          else if (data.state === "error") close(new Error(data.error ?? "download"));
-        } catch (error) {
-          return;
-        }
-      };
-
-      source.onerror = () => close(new Error("download"));
-      signal.addEventListener("abort", () => close(new Error("abort")), { once: true });
-    });
-  }
-
-  onProgress(100);
-
-  const response = await fetch(streamSource(id), { signal });
-  if (!response.ok) throw new Error("stream");
-
-  return response.blob();
-}
-
 export function useAudioEngine(track: Track | null, options: Options) {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -73,7 +17,6 @@ export function useAudioEngine(track: Track | null, options: Options) {
   const [progress, setProgress] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  const objectURL = useRef("");
   const ready = useRef(false);
   const failure = useRef(options.onFailure);
   const loaded = useRef(options.onLoaded);
@@ -88,10 +31,7 @@ export function useAudioEngine(track: Track | null, options: Options) {
     if (!track) return;
 
     const audio = audioElement();
-    const controller = new AbortController();
     let cancelled = false;
-
-    audio.pause();
 
     const restoreAt =
       options.restoring.current && options.pendingSeek.current > 0
@@ -107,53 +47,37 @@ export function useAudioEngine(track: Track | null, options: Options) {
     setBuffering(true);
     setProgress(0);
 
-    loadTrack(track.id, controller.signal, setProgress)
-      .then((blob) => {
-        if (cancelled) return;
+    audio.pause();
+    audio.src = streamSource(track.id);
+    audio.load();
 
-        const resumeAt = restoreAt > 0 ? restoreAt : audio.currentTime;
+    const apply = () => {
+      if (cancelled) return;
 
-        if (objectURL.current) URL.revokeObjectURL(objectURL.current);
+      if (restoreAt > 0) {
+        audio.currentTime = restoreAt;
+        setTime(restoreAt);
+      }
 
-        const url = URL.createObjectURL(blob);
-        objectURL.current = url;
+      setDuration(audio.duration || track.duration || 0);
+      ready.current = true;
+      loaded.current();
 
-        audio.src = url;
-        audio.load();
+      const state = usePlayer.getState();
+      for (const item of state.queue.slice(state.index + 1, state.index + 2)) {
+        warmTrack(item.id);
+      }
 
-        const apply = () => {
-          if (resumeAt > 0) {
-            audio.currentTime = resumeAt;
-            setTime(resumeAt);
-          }
+      if (state.playing) {
+        audio.play().catch(() => undefined);
+      }
+    };
 
-          setDuration(audio.duration || track.duration || 0);
-          setBuffering(false);
-          ready.current = true;
-          loaded.current();
-
-          const state = usePlayer.getState();
-          for (const item of state.queue.slice(state.index + 1, state.index + 4)) {
-            warmTrack(item.id);
-          }
-
-          if (state.playing) {
-            audio.play().catch(() => undefined);
-          }
-        };
-
-        audio.addEventListener("loadedmetadata", apply, { once: true });
-      })
-      .catch((error) => {
-        if (cancelled || controller.signal.aborted) return;
-
-        setBuffering(false);
-        failure.current();
-      });
+    audio.addEventListener("loadedmetadata", apply, { once: true });
 
     return () => {
       cancelled = true;
-      controller.abort();
+      audio.removeEventListener("loadedmetadata", apply);
     };
   }, [track?.id]);
 
@@ -182,9 +106,22 @@ export function useAudioEngine(track: Track | null, options: Options) {
     };
     const onWaiting = () => setBuffering(true);
     const onPlaying = () => setBuffering(false);
+    const onProgress = () => {
+      if (!audio.duration) return;
+
+      try {
+        const ranges = audio.buffered;
+        if (ranges.length > 0) {
+          setProgress(Math.min(100, (ranges.end(ranges.length - 1) / audio.duration) * 100));
+        }
+      } catch (error) {
+        return;
+      }
+    };
     const onError = () => {
       if (!ready.current) {
         setBuffering(true);
+        failure.current();
         return;
       }
 
@@ -220,6 +157,8 @@ export function useAudioEngine(track: Track | null, options: Options) {
     };
 
     audio.addEventListener("timeupdate", onTime);
+    audio.addEventListener("timeupdate", onProgress);
+    audio.addEventListener("progress", onProgress);
     audio.addEventListener("loadedmetadata", onMeta);
     audio.addEventListener("waiting", onWaiting);
     audio.addEventListener("playing", onPlaying);
@@ -229,6 +168,8 @@ export function useAudioEngine(track: Track | null, options: Options) {
 
     return () => {
       audio.removeEventListener("timeupdate", onTime);
+      audio.removeEventListener("timeupdate", onProgress);
+      audio.removeEventListener("progress", onProgress);
       audio.removeEventListener("loadedmetadata", onMeta);
       audio.removeEventListener("waiting", onWaiting);
       audio.removeEventListener("playing", onPlaying);
@@ -243,15 +184,6 @@ export function useAudioEngine(track: Track | null, options: Options) {
     audio.playbackRate = rate;
     audio.preservesPitch = rate >= 1;
   }, [rate]);
-
-  useEffect(() => {
-    return () => {
-      if (objectURL.current) {
-        URL.revokeObjectURL(objectURL.current);
-        objectURL.current = "";
-      }
-    };
-  }, []);
 
   const seekTo = (seconds: number) => {
     const audio = audioElement();

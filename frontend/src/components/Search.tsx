@@ -11,7 +11,7 @@ import Equalizer from "@/components/Equalizer";
 import { useNav } from "@/store/navStore";
 import { usePlayer, type Track } from "@/store/playerStore";
 import { attachTrack } from "@/lib/attach";
-import { coverSource } from "@/lib/audio";
+import { coverSource, warmTrack } from "@/lib/audio";
 
 function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -29,6 +29,7 @@ export default function Search() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warm = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playQueue = usePlayer((state) => state.playQueue);
   const openArtist = useNav((state) => state.openArtist);
@@ -65,9 +66,16 @@ export default function Search() {
           return;
         }
         const data = await response.json();
-        setTracks(data.tracks ?? []);
+        const found: Track[] = data.tracks ?? [];
+
+        setTracks(found);
         setMore(Boolean(data.more));
         setAsked(true);
+
+        if (warm.current) clearTimeout(warm.current);
+        if (found.length > 0) {
+          warm.current = setTimeout(() => warmTrack(found[0].id), 400);
+        }
       } finally {
         setLoading(false);
       }
@@ -75,6 +83,7 @@ export default function Search() {
 
     return () => {
       if (timer.current) clearTimeout(timer.current);
+      if (warm.current) clearTimeout(warm.current);
     };
   }, [query]);
 

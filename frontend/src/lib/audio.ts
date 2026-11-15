@@ -83,7 +83,7 @@ export function playTrack(id: string) {
 }
 
 export function warmTrack(id: string) {
-  fetch(`/api/download/${id}`, { method: "POST" }).catch(() => undefined);
+  fetch(`/api/stream/${id}/prepare`, { method: "POST" }).catch(() => undefined);
 }
 
 export type CoverSize = "small" | "medium" | "large";

@@ -385,8 +385,15 @@ paths:
   /api/stream/{id}:
     get:
       summary: Аудио трека
+      description: Отдаёт трек прогрессивно и поддерживает Range-запросы для перемотки.
       parameters:
         - $ref: "#/components/parameters/TrackID"
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+          example: bytes=0-
       responses:
         "200":
           description: Аудио
@@ -403,8 +410,25 @@ paths:
               schema:
                 type: string
                 format: binary
+        "206":
+          description: Фрагмент аудио
+          content:
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
         "502":
           $ref: "#/components/responses/Error"
+
+  /api/stream/{id}/prepare:
+    post:
+      summary: Прогреть прямую ссылку на трек
+      description: Готовит источник в фоне, чтобы воспроизведение началось без ожидания.
+      parameters:
+        - $ref: "#/components/parameters/TrackID"
+      responses:
+        "204":
+          description: Прогрев запущен
 
   /api/download/{id}:
     post:
