@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { levels } from "@/lib/audio";
+import { currentAccent } from "@/lib/color";
 import { alpha, grainTexture, mixHex, tone, useBackgroundCanvas } from "@/lib/background";
 import type { Palette } from "@/lib/palette";
 import { useAccentColor } from "@/lib/useAccentColor";
@@ -32,11 +33,12 @@ uniform vec2 uResolution;
 uniform vec3 uHot;
 uniform vec3 uWarm;
 uniform vec3 uDeep;
+uniform vec2 uShift;
 
 const float HORIZON = 1.0;
 const float DISK_IN = 2.7;
 const float DISK_OUT = 8.5;
-const int STEPS = 170;
+const int STEPS = 150;
 
 float hash13(vec3 p) {
   p = fract(p * 0.1031);
@@ -117,8 +119,10 @@ vec3 sky(vec3 dir) {
 vec3 diskColor(vec3 p, float r) {
   float omega = 1.0 / pow(r, 1.5);
   vec2 swirl = rot2(p.xz, -uTime * omega * 5.5);
-  float grain = fbm3(vec3(swirl * 0.8, r * 0.4));
-  float bands = 0.22 + 1.05 * grain;
+  float grain = fbm3(vec3(swirl * 1.8, r * 0.85));
+  float filament = fbm3(vec3(swirl * 4.2, r * 1.6));
+  float striation = 0.5 + 0.5 * sin(r * 13.0 + grain * 14.0);
+  float bands = 0.18 + 0.7 * grain + 0.22 * striation + 0.28 * filament;
 
   float heat = clamp(2.5 / r, 0.0, 1.0);
   heat = pow(heat, 1.4);
@@ -135,7 +139,7 @@ vec3 diskColor(vec3 p, float r) {
 
 void main() {
   vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-  uv.y += 0.13;
+  uv += uShift;
 
   float orbit = uTime * 0.012;
   vec3 ro = vec3(sin(orbit) * 20.0, 3.4, -cos(orbit) * 20.0);
@@ -152,6 +156,7 @@ void main() {
   vec3 col = vec3(0.0);
   float transmit = 1.0;
   float captured = 0.0;
+  float halo = 0.0;
 
   for (int i = 0; i < STEPS; i++) {
     float r2 = dot(pos, pos);
@@ -164,7 +169,9 @@ void main() {
     if (r2 > 1600.0) break;
 
     float r = sqrt(r2);
-    float dt = clamp(0.06 * r, 0.05, 0.6);
+    float dt = r > 18.0 ? 0.24 * r : clamp(0.05 * r, 0.045, 0.5);
+
+    halo += exp(-abs(r - 1.5) * 3.2) * dt * 0.5;
 
     vec3 acceleration = -1.5 * h2 * pos / (r2 * r2 * r);
     vel += acceleration * dt;
@@ -193,11 +200,18 @@ void main() {
 
   if (captured < 0.5) {
     col += sky(normalize(vel)) * transmit;
+    col += mix(uWarm, uHot, 0.5) * halo * (1.0 - uLight * 0.5);
+  } else {
+    float wash = dot(col, vec3(0.333));
+    col *= smoothstep(0.04, 0.4, wash);
   }
 
   if (uLight < 0.5) {
     col = col / (1.0 + col * 0.62);
   }
+
+  float luma = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(luma), col, 1.0 + (1.0 - uLight) * 0.35);
 
   gl_FragColor = vec4(col, 1.0);
 }
@@ -549,6 +563,7 @@ function BlackHoleScene({ colors, light = false }: Props) {
       const hot = uniform("uHot");
       const warm = uniform("uWarm");
       const deep = uniform("uDeep");
+      const shift = uniform("uShift");
 
       const current = targets.current.map((color) => [...color]);
       let lightMix = light ? 1 : 0;
@@ -557,6 +572,8 @@ function BlackHoleScene({ colors, light = false }: Props) {
       let lost = false;
       let visible = !document.hidden;
       let lastDraw = 0;
+      let quality = 0.8;
+      let tunedAt = 0;
       const started = performance.now();
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -568,9 +585,8 @@ function BlackHoleScene({ colors, light = false }: Props) {
         if (width === 0 || height === 0) return;
 
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
-        const scale = Math.min(1, 560 / Math.max(width * ratio, 1));
-        const bufferWidth = Math.max(2, Math.round(width * ratio * scale));
-        const bufferHeight = Math.max(2, Math.round(height * ratio * scale));
+        const bufferWidth = Math.max(2, Math.round(width * ratio * quality));
+        const bufferHeight = Math.max(2, Math.round(height * ratio * quality));
 
         if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
           canvas.width = bufferWidth;
@@ -579,6 +595,13 @@ function BlackHoleScene({ colors, light = false }: Props) {
 
         gl.viewport(0, 0, bufferWidth, bufferHeight);
         gl.uniform2f(resolution, bufferWidth, bufferHeight);
+
+        const aspect = width / Math.max(height, 1);
+        gl.uniform2f(
+          shift,
+          aspect > 1.35 ? -Math.min(0.9, aspect * 0.34) : 0.0,
+          aspect > 1.35 ? 0.05 : 0.13,
+        );
       };
 
       const draw = (now: number) => {
@@ -603,6 +626,18 @@ function BlackHoleScene({ colors, light = false }: Props) {
         gl.uniform1f(time, (performance.now() - started) / 1000);
         gl.uniform1f(bass, sound.bass);
         gl.uniform1f(lightUniform, lightMix);
+
+        if (now - tunedAt > 1600) {
+          tunedAt = now;
+
+          if (now - lastDraw > 52 && quality > 0.38) {
+            quality = Math.max(0.38, quality * 0.86);
+            resize();
+          } else if (now - lastDraw < 38 && quality < 0.8) {
+            quality = Math.min(0.8, quality * 1.14);
+            resize();
+          }
+        }
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       };
 
