@@ -1,78 +1,17 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-
 import { waveGenres } from "@/lib/genres";
+import { useMarker, useScrollIntoView } from "@/lib/useMarker";
 
 type Props = {
   value: string;
   onChange: (id: string) => void;
 };
 
-type Marker = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
-
 export default function WaveGenres({ value, onChange }: Props) {
-  const listRef = useRef<HTMLDivElement>(null);
-  const [marker, setMarker] = useState<Marker | null>(null);
+  const { listRef, marker } = useMarker(value);
 
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const update = () => {
-      const active = list.querySelector<HTMLElement>('[aria-pressed="true"]');
-      if (!active) {
-        setMarker(null);
-        return;
-      }
-
-      const origin = list.getBoundingClientRect();
-      const rect = active.getBoundingClientRect();
-
-      setMarker({
-        left: rect.left - origin.left,
-        top: rect.top - origin.top,
-        width: rect.width,
-        height: rect.height,
-      });
-    };
-
-    update();
-
-    const observer = new ResizeObserver(update);
-    observer.observe(list);
-    window.addEventListener("resize", update);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, [value]);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-
-    const active = list.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (!active) return;
-
-    const origin = list.getBoundingClientRect();
-    const rect = active.getBoundingClientRect();
-
-    if (rect.left >= origin.left && rect.right <= origin.right) return;
-
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    active.scrollIntoView({
-      behavior: reduced ? "auto" : "smooth",
-      block: "nearest",
-      inline: "center",
-    });
-  }, [value]);
+  useScrollIntoView(value, listRef);
 
   return (
     <div className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:overflow-visible [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-32px),transparent_100%)] sm:[mask-image:none]">

@@ -31,6 +31,7 @@ uniform float uEnergy;
 uniform float uProgress;
 uniform float uLight;
 uniform vec2 uResolution;
+uniform float uHeight;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform vec3 uColorC;
@@ -71,7 +72,7 @@ float fbm(vec2 p) {
 void main() {
   vec2 uv = vUv;
   float aspect = uResolution.x / max(uResolution.y, 1.0);
-  vec2 p = (uv - 0.5) * vec2(aspect * 1.35, 1.0) * 2.2;
+  vec2 p = (uv - 0.5) * vec2(aspect, 1.0) * 2.2 * (uHeight / 900.0);
 
   float t = uTime * 0.055 + uBass * 0.04;
 
@@ -216,6 +217,7 @@ export default function Aurora({ colors, light = false }: Props) {
       const progress = uniform("uProgress");
       const lightUniform = uniform("uLight");
       const resolution = uniform("uResolution");
+      const height = uniform("uHeight");
       const colorA = uniform("uColorA");
       const colorB = uniform("uColorB");
       const colorC = uniform("uColorC");
@@ -233,12 +235,12 @@ export default function Aurora({ colors, light = false }: Props) {
         if (lost || gl.isContextLost()) return;
 
         const width = holder.clientWidth;
-        const height = holder.clientHeight;
-        if (width === 0 || height === 0) return;
+        const heightValue = holder.clientHeight;
+        if (width === 0 || heightValue === 0) return;
 
         const ratio = Math.min(window.devicePixelRatio || 1, 2);
         const bufferWidth = Math.round(width * ratio);
-        const bufferHeight = Math.round(height * ratio);
+        const bufferHeight = Math.round(heightValue * ratio);
 
         if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
           canvas.width = bufferWidth;
@@ -247,6 +249,7 @@ export default function Aurora({ colors, light = false }: Props) {
 
         gl.viewport(0, 0, bufferWidth, bufferHeight);
         gl.uniform2f(resolution, bufferWidth, bufferHeight);
+        gl.uniform1f(height, heightValue);
       };
 
       const draw = () => {
