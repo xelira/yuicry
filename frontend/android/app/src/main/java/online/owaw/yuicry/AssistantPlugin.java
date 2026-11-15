@@ -303,7 +303,7 @@ public class AssistantPlugin extends Plugin {
             connection = (HttpURLConnection) new URL(MODEL_URL).openConnection();
             connection.setConnectTimeout(30000);
             connection.setReadTimeout(60000);
-            connection.setRequestProperty("User-Agent", "yuicry/1.5.0");
+            connection.setRequestProperty("User-Agent", "yuicry/1.6.0");
             connection.connect();
 
             if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {

@@ -5,6 +5,7 @@ import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 
 import { useAssistant } from "@/store/assistantStore";
+import { useRecognize } from "@/store/recognizeStore";
 import { useNav } from "@/store/navStore";
 import { usePlayer } from "@/store/playerStore";
 import { useSettings } from "@/store/settingsStore";
@@ -14,6 +15,13 @@ export default function BackHandler() {
     if (!Capacitor.isNativePlatform()) return;
 
     const listener = App.addListener("backButton", () => {
+      const recognize = useRecognize.getState();
+
+      if (recognize.open) {
+        recognize.setOpen(false);
+        return;
+      }
+
       const assistant = useAssistant.getState();
 
       if (assistant.open) {

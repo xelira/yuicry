@@ -8,6 +8,8 @@ import { AudioWaveform, Heart, Library, Search as SearchIcon } from "lucide-reac
 import Albums from "@/components/Albums";
 import Assistant from "@/components/Assistant";
 import AssistantIcon from "@/components/AssistantIcon";
+import Recognize from "@/components/Recognize";
+import RecognizeIcon from "@/components/RecognizeIcon";
 import Background from "@/components/Background";
 import CatalogView from "@/components/CatalogView";
 import DragOverlay from "@/components/DragOverlay";
@@ -28,6 +30,7 @@ import { useNav } from "@/store/navStore";
 import { currentTrack, usePlayer } from "@/store/playerStore";
 import { useAppearance } from "@/store/appearanceStore";
 import { useAssistant } from "@/store/assistantStore";
+import { useRecognize } from "@/store/recognizeStore";
 import { useSettings } from "@/store/settingsStore";
 
 type Profile = {
@@ -283,6 +286,15 @@ export default function Home() {
           <div className="flex-1" />
 
           <button
+            onClick={() => useRecognize.getState().setOpen(true)}
+            aria-label="Узнать музыку"
+            className="flex h-9 items-center gap-2 rounded-full border border-line px-2.5 text-[12px] text-muted transition-colors hover:border-lineStrong hover:text-ink sm:px-3"
+          >
+            <RecognizeIcon size={17} />
+            <span className="hidden sm:block">Узнать</span>
+          </button>
+
+          <button
             onClick={() => {
               const assistant = useAssistant.getState();
               assistant.setExpanded(false);
@@ -458,6 +470,7 @@ export default function Home() {
       <Player />
       <MobileNav tab={settingsOpen ? null : tab} onChange={selectTab} compact={Boolean(track)} />
       <NowPlaying />
+      <Recognize />
       <Assistant />
       <SimilarSheet />
       <DragOverlay />

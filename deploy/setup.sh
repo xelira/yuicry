@@ -64,6 +64,7 @@ SESSION_SECRET=$secret
 COOKIE_SECURE=1
 TTS_URL=http://127.0.0.1:8790
 STT_URL=http://127.0.0.1:8791
+RECOGNIZE_URL=http://127.0.0.1:8792
 EOF
 
   if [ -n "${NVIDIA_API_KEY:-}" ]; then
@@ -125,6 +126,14 @@ deploy_api() {
   systemctl daemon-reload
   systemctl enable --now yuicry-stt
   systemctl restart yuicry-stt
+
+  say "распознавание музыки"
+  python3 -m pip install -q --break-system-packages shazamio
+  install -m 755 "$here/yuicry-recognize.py" /usr/local/bin/yuicry-recognize
+  install -m 644 "$here/yuicry-recognize.service" /etc/systemd/system/yuicry-recognize.service
+  systemctl daemon-reload
+  systemctl enable --now yuicry-recognize
+  systemctl restart yuicry-recognize
 
   say "systemd"
   install -m 644 "$here/yuicry-api.service" /etc/systemd/system/yuicry-api.service

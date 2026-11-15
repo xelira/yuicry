@@ -18,7 +18,7 @@ import (
 	"github.com/xelira/yuicry/backend/internal/storage"
 )
 
-var Version = "1.5.0"
+var Version = "1.6.0"
 
 type API struct {
 	Store     *Store
@@ -92,6 +92,7 @@ func main() {
 	mux.HandleFunc("POST /api/assistant", api.handleAssistant)
 	mux.HandleFunc("GET /api/tts", api.handleTTS)
 	mux.HandleFunc("POST /api/transcribe", api.handleTranscribe)
+	mux.HandleFunc("POST /api/recognize", api.handleRecognize)
 	mux.HandleFunc("GET /api/similar/{id}", api.handleSimilar)
 	mux.HandleFunc("GET /api/artist/{id}", api.handleArtist)
 	mux.HandleFunc("GET /api/album/{id}", api.handleCatalogAlbum)

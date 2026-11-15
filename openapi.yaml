@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: yuicry API
-  version: 1.5.0
+  version: 1.6.0
   description: Музыкальный сервис yuicry. Все запросы, кроме публичных, используют cookie-сессию.
 servers:
   - url: https://yuicry.owaw.online
@@ -229,6 +229,49 @@ paths:
                     type: string
         "502":
           description: Распознавание недоступно
+
+  /api/recognize:
+    post:
+      summary: Распознать музыку
+      requestBody:
+        required: true
+        content:
+          audio/webm:
+            schema:
+              type: string
+              format: binary
+          audio/mpeg:
+            schema:
+              type: string
+              format: binary
+          audio/wav:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Распознанный трек
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  artist:
+                    type: string
+                  album:
+                    type: string
+                  cover:
+                    type: string
+                  shazam:
+                    type: string
+                  tracks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Track"
+        "404":
+          description: Не удалось распознать
 
   /api/tts:
     get:

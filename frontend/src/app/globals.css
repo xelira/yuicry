@@ -297,6 +297,17 @@ audio {
   }
 }
 
+@keyframes recognize-ring {
+  from {
+    opacity: 0.45;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
 @keyframes island-in {
   from {
     opacity: 0;
