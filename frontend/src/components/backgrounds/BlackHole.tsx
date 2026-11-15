@@ -121,13 +121,13 @@ vec3 diskColor(vec3 p, float r, vec3 viewDir) {
 
   float bright = pow(2.4 / r, 2.3);
   col *= (0.2 + bands * 1.5) * (0.3 + bright);
-  col *= 1.0 + 1.9 * smoothstep(4.2, 2.65, r);
+  col *= 1.0 + (1.9 - uLight * 0.9) * smoothstep(4.2, 2.65, r);
   col *= 1.0 + uBass * 0.45;
 
   vec3 velocity = normalize(vec3(p.z, 0.0, -p.x));
   float beam = dot(velocity, viewDir);
   col *= 1.0 + 0.9 * beam;
-  col *= 1.0 - uLight * 0.24;
+  col *= 1.0 - uLight * 0.4;
 
   return col;
 }
@@ -208,7 +208,7 @@ void main() {
   if (captured < 0.5) {
     col += farCol * nearTransmit;
     col += sky(normalize(vel)) * nearTransmit * farTransmit;
-    col += mix(uWarm, uHot, 0.45) * halo * (1.0 - uLight * 0.5);
+    col += mix(uWarm, uHot, 0.45) * halo * (1.0 - uLight * 0.72);
   }
 
   if (uLight < 0.5) {
@@ -248,7 +248,7 @@ void main() {
 
   glow /= total;
 
-  vec3 color = base + glow * (uLight > 0.5 ? 0.42 : 1.05);
+  vec3 color = base + glow * (uLight > 0.5 ? 0.18 : 1.05);
   gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 `;
@@ -287,9 +287,9 @@ function paletteTriple(
   light: boolean,
 ): [[number, number, number], [number, number, number], [number, number, number]] {
   const tint = mixHex("#ff7a33", colors[0], 0.12);
-  const warm = light ? mixHex(tint, "#ff5a20", 0.35) : tint;
-  const hot = light ? mixHex("#fff8ee", warm, 0.34) : mixHex("#fff6e8", warm, 0.2);
-  const deep = light ? mixHex(warm, "#2a0803", 0.5) : mixHex(warm, "#1c0503", 0.78);
+  const warm = light ? "#d94b16" : tint;
+  const hot = light ? "#ffb072" : mixHex("#fff6e8", warm, 0.2);
+  const deep = light ? "#541103" : mixHex(warm, "#1c0503", 0.78);
 
   return [rgb(hot), rgb(warm), rgb(deep)];
 }
