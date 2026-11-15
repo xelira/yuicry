@@ -15,22 +15,22 @@ const Contour = dynamic(() => import("@/components/backgrounds/Contour"), {
   loading: () => null,
 });
 
-const Moire = dynamic(() => import("@/components/backgrounds/Moire"), {
+const BlackHole = dynamic(() => import("@/components/backgrounds/BlackHole"), {
   ssr: false,
   loading: () => null,
 });
 
-const Halftone = dynamic(() => import("@/components/backgrounds/Halftone"), {
+const Field = dynamic(() => import("@/components/backgrounds/Field"), {
   ssr: false,
   loading: () => null,
 });
 
-const Blueprint = dynamic(() => import("@/components/backgrounds/Blueprint"), {
+const Film = dynamic(() => import("@/components/backgrounds/Film"), {
   ssr: false,
   loading: () => null,
 });
 
-const Weave = dynamic(() => import("@/components/backgrounds/Weave"), {
+const Glass = dynamic(() => import("@/components/backgrounds/Glass"), {
   ssr: false,
   loading: () => null,
 });
@@ -46,10 +46,10 @@ export default function Background({ colors, light = false, id }: Props) {
   const background = id ?? selected;
 
   if (background === "contour") return <Contour colors={colors} light={light} />;
-  if (background === "moire") return <Moire colors={colors} light={light} />;
-  if (background === "halftone") return <Halftone colors={colors} light={light} />;
-  if (background === "blueprint") return <Blueprint colors={colors} light={light} />;
-  if (background === "weave") return <Weave colors={colors} light={light} />;
+  if (background === "blackhole") return <BlackHole colors={colors} light={light} />;
+  if (background === "field") return <Field colors={colors} light={light} />;
+  if (background === "film") return <Film colors={colors} light={light} />;
+  if (background === "glass") return <Glass colors={colors} light={light} />;
 
   return <Aurora colors={colors} light={light} />;
 }

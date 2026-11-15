@@ -468,18 +468,18 @@ audio {
 }
 
 [data-background="contour"],
-[data-background="moire"],
-[data-background="halftone"],
-[data-background="blueprint"],
-[data-background="weave"] {
+[data-background="blackhole"],
+[data-background="field"],
+[data-background="film"],
+[data-background="glass"] {
   --veil: rgb(9 9 12 / 0.12);
 }
 
 [data-theme="light"][data-background="contour"],
-[data-theme="light"][data-background="moire"],
-[data-theme="light"][data-background="halftone"],
-[data-theme="light"][data-background="blueprint"],
-[data-theme="light"][data-background="weave"] {
+[data-theme="light"][data-background="blackhole"],
+[data-theme="light"][data-background="field"],
+[data-theme="light"][data-background="film"],
+[data-theme="light"][data-background="glass"] {
   --veil: rgb(250 249 247 / 0.16);
 }
 

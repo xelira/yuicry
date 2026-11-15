@@ -1,6 +1,12 @@
 import { create } from "zustand";
 
-export type BackgroundId = "aurora" | "contour" | "moire" | "halftone" | "blueprint" | "weave";
+export type BackgroundId =
+  | "aurora"
+  | "contour"
+  | "blackhole"
+  | "field"
+  | "film"
+  | "glass";
 
 export const backgrounds: {
   id: BackgroundId;
@@ -9,18 +15,22 @@ export const backgrounds: {
 }[] = [
   { id: "aurora", name: "Основной", text: "Свечение обложки" },
   { id: "contour", name: "Топография", text: "Линии рельефа" },
-  { id: "moire", name: "Моар", text: "Интерференция" },
-  { id: "halftone", name: "Полутон", text: "Печатные точки" },
-  { id: "blueprint", name: "Чертёж", text: "Технические линии" },
-  { id: "weave", name: "Ткань", text: "Плетение" },
+  { id: "blackhole", name: "Чёрная дыра", text: "Горизонт событий" },
+  { id: "field", name: "Поле", text: "Силовые линии" },
+  { id: "film", name: "Плёнка", text: "Кадры и зерно" },
+  { id: "glass", name: "Витраж", text: "Цветные грани" },
 ];
 
 const legacy: Record<string, BackgroundId> = {
-  particles: "halftone",
+  particles: "film",
   waves: "contour",
-  grid: "blueprint",
-  rings: "moire",
-  mesh: "weave",
+  grid: "field",
+  rings: "blackhole",
+  mesh: "glass",
+  moire: "blackhole",
+  halftone: "film",
+  blueprint: "field",
+  weave: "glass",
 };
 
 const key = "yuicry-background";
