@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Heart, Loader2, Mic, RotateCcw, Square, X } from "lucide-react";
+import { Heart, Loader2, Mic, Play, RotateCcw, Square, X } from "lucide-react";
 
 import RecognizeIcon from "@/components/RecognizeIcon";
 import { coverSource } from "@/lib/audio";
@@ -364,6 +364,7 @@ export default function Recognize() {
                     }}
                     className="flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-[12px] font-medium text-accentText shadow-[0_0_28px_-12px_var(--accent)] transition hover:brightness-110"
                   >
+                    <Play size={13} fill="currentColor" />
                     Слушать
                   </button>
 
