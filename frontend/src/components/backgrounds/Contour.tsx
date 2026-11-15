@@ -3,7 +3,7 @@
 import { useRef } from "react";
 
 import { levels } from "@/lib/audio";
-import { alpha, grainTexture, tone, useBackgroundCanvas } from "@/lib/background";
+import { alpha, grainTexture, tone, useBackgroundCanvas, wash } from "@/lib/background";
 import type { Palette } from "@/lib/palette";
 import { useAccentColor } from "@/lib/useAccentColor";
 
@@ -42,7 +42,7 @@ function sampleNoise(data: Float32Array, size: number, x: number, y: number) {
   return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
 }
 
-export default function Contour({ light = false }: Props) {
+export default function Contour({ colors, light = false }: Props) {
   const accent = useAccentColor();
   const table = useRef<Float32Array | null>(null);
 
@@ -54,7 +54,7 @@ export default function Contour({ light = false }: Props) {
     const sound = levels();
     const accentTone = light ? tone(accent, true) : accent;
     const ink = light ? "24,24,32" : "244,244,252";
-    const cell = 44;
+    const cell = 38;
     const cols = Math.ceil(width / cell) + 1;
     const rows = Math.ceil(height / cell) + 1;
     const drift = time * 0.025;
@@ -64,8 +64,8 @@ export default function Contour({ light = false }: Props) {
       const values: number[] = [];
 
       for (let column = 0; column < cols; column += 1) {
-        const x = column * 0.045 + drift;
-        const y = row * 0.045 - drift * 0.6;
+        const x = column * 0.075 + drift;
+        const y = row * 0.075 - drift * 0.6;
         const value =
           sampleNoise(table.current!, 128, x * 8, y * 8) * 0.76 +
           sampleNoise(table.current!, 128, x * 17 + 41, y * 17 - 23) * 0.24;
@@ -77,12 +77,13 @@ export default function Contour({ light = false }: Props) {
     }
 
     ctx.clearRect(0, 0, width, height);
+    wash(ctx, width, height, colors, light);
 
-    const count = 4;
+    const count = 7;
 
     for (let index = 1; index <= count; index += 1) {
       const level = index / (count + 1);
-      const highlighted = index === 2;
+      const highlighted = index === 3 || index === 6;
       const scale = 1 + sound.bass * 0.015;
 
       ctx.beginPath();
@@ -129,7 +130,7 @@ export default function Contour({ light = false }: Props) {
 
       ctx.strokeStyle = highlighted
         ? alpha(accentTone, light ? 0.34 : 0.42)
-        : `rgba(${ink},${light ? 0.13 : 0.11})`;
+        : `rgba(${ink},${light ? 0.13 : 0.12})`;
       ctx.lineWidth = highlighted ? 1.3 : 0.9;
       ctx.stroke();
     }

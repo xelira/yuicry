@@ -456,6 +456,7 @@ export default function Home() {
                 >
                   <Settings
                     profile={profile}
+                    palette={palette}
                     theme={theme}
                     onToggleTheme={toggleTheme}
                     onLogout={() => void logout()}

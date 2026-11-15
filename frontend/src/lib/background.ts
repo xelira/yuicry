@@ -43,6 +43,40 @@ export function paletteTones(colors: Palette, light: boolean) {
   return colors.map((color) => tone(color, light));
 }
 
+export function wash(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  colors: Palette,
+  light: boolean,
+) {
+  const first = tone(colors[0], light);
+  const second = tone(colors[1], light);
+  const third = tone(colors[2], light);
+
+  const diagonal = ctx.createLinearGradient(0, 0, width, height);
+  diagonal.addColorStop(0, alpha(first, light ? 0.14 : 0.2));
+  diagonal.addColorStop(0.48, alpha(third, light ? 0.07 : 0.1));
+  diagonal.addColorStop(1, alpha(second, light ? 0.13 : 0.18));
+
+  ctx.fillStyle = diagonal;
+  ctx.fillRect(0, 0, width, height);
+
+  const corner = ctx.createRadialGradient(
+    width * 0.18,
+    height * 0.08,
+    0,
+    width * 0.18,
+    height * 0.08,
+    Math.max(width, height) * 0.7,
+  );
+  corner.addColorStop(0, alpha(first, light ? 0.1 : 0.13));
+  corner.addColorStop(1, alpha(first, 0));
+
+  ctx.fillStyle = corner;
+  ctx.fillRect(0, 0, width, height);
+}
+
 export function useBackgroundCanvas(draw: BackgroundDraw) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawRef = useRef(draw);
@@ -58,7 +92,7 @@ export function useBackgroundCanvas(draw: BackgroundDraw) {
     let width = 1;
     let height = 1;
     let frame = 0;
-    let running = true;
+    let running = false;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const started = performance.now();

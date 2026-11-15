@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -21,8 +20,10 @@ import {
 } from "lucide-react";
 
 import AssistantIcon from "@/components/AssistantIcon";
+import Background from "@/components/Background";
 import AccentPicker from "@/components/settings/AccentPicker";
 import { avatarSource } from "@/lib/avatar";
+import type { Palette as ColorPalette } from "@/lib/palette";
 import { useAccentColor } from "@/lib/useAccentColor";
 import { backgrounds, useAppearance, type BackgroundId } from "@/store/appearanceStore";
 import { useAssistant } from "@/store/assistantStore";
@@ -35,56 +36,13 @@ type Profile = {
 
 type Props = {
   profile: Profile | null;
+  palette: ColorPalette;
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onLogout: () => void;
 };
 
-function preview(id: BackgroundId): CSSProperties {
-  if (id === "contour") {
-    return {
-      background:
-        "repeating-radial-gradient(ellipse 120% 90% at 25% 45%, transparent 0 5px, rgb(var(--text-rgb) / 0.16) 6px 7px, transparent 8px 13px), repeating-radial-gradient(ellipse 90% 120% at 78% 62%, transparent 0 6px, rgb(var(--accent-rgb) / 0.2) 7px 8px, transparent 9px 15px), var(--bg)",
-    };
-  }
-
-  if (id === "moire") {
-    return {
-      background:
-        "repeating-radial-gradient(circle at 32% 50%, transparent 0 5px, rgb(var(--text-rgb) / 0.18) 6px 7px, transparent 8px 12px), repeating-radial-gradient(circle at 68% 50%, transparent 0 5px, rgb(var(--accent-rgb) / 0.18) 6px 7px, transparent 8px 12px), var(--bg)",
-    };
-  }
-
-  if (id === "halftone") {
-    return {
-      backgroundColor: "var(--bg)",
-      backgroundImage:
-        "radial-gradient(circle, rgb(var(--text-rgb) / 0.42) 1.1px, transparent 1.4px), radial-gradient(circle at 70% 30%, rgb(var(--accent-rgb) / 0.35), transparent 45%)",
-      backgroundSize: "9px 9px, 100% 100%",
-    };
-  }
-
-  if (id === "blueprint") {
-    return {
-      background:
-        "radial-gradient(circle at 50% 50%, transparent 0 26%, rgb(var(--text-rgb) / 0.22) 27% 28%, transparent 29% 37%, rgb(var(--text-rgb) / 0.12) 38% 39%, transparent 40%), linear-gradient(90deg, transparent 49.5%, rgb(var(--text-rgb) / 0.18) 50%, transparent 50.5%), linear-gradient(0deg, transparent 49.5%, rgb(var(--text-rgb) / 0.18) 50%, transparent 50.5%), conic-gradient(from 20deg at 50% 50%, transparent 0 40deg, rgb(var(--accent-rgb) / 0.5) 40deg 55deg, transparent 55deg 360deg), var(--bg)",
-    };
-  }
-
-  if (id === "weave") {
-    return {
-      background:
-        "repeating-linear-gradient(45deg, transparent 0 5px, rgb(var(--text-rgb) / 0.12) 6px 7px), repeating-linear-gradient(-45deg, transparent 0 5px, rgb(var(--accent-rgb) / 0.12) 6px 7px), var(--bg)",
-    };
-  }
-
-  return {
-    background:
-      "radial-gradient(120% 120% at 20% 0%, var(--accent) 0%, transparent 55%), radial-gradient(100% 100% at 90% 100%, #6a5cff 0%, transparent 55%), var(--bg)",
-  };
-}
-
-export default function Settings({ profile, theme, onToggleTheme, onLogout }: Props) {
+export default function Settings({ profile, palette, theme, onToggleTheme, onLogout }: Props) {
   const page = useSettings((state) => state.page);
   const setPage = useSettings((state) => state.setPage);
   const hide = useSettings((state) => state.hide);
@@ -121,7 +79,10 @@ export default function Settings({ profile, theme, onToggleTheme, onLogout }: Pr
           </p>
 
           <div className="relative mt-4 overflow-hidden rounded-[28px] border border-line shadow-lift">
-            <div className="absolute inset-0" style={preview(background)} />
+            <div className="absolute inset-0">
+              <Background id={background} colors={palette} light={theme === "light"} />
+            </div>
+            <div className="absolute inset-0" style={{ background: "var(--veil)" }} />
             <div className="relative p-4 sm:p-5">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-[10px] font-medium text-white/85 backdrop-blur-md">
                 Предпросмотр
@@ -215,10 +176,9 @@ export default function Settings({ profile, theme, onToggleTheme, onLogout }: Pr
                         : "border-line bg-surface2/40 hover:border-lineStrong"
                     }`}
                   >
-                    <span
-                      className="block h-24 w-full transition-transform duration-500 group-hover:scale-[1.04]"
-                      style={preview(item.id)}
-                    />
+                    <span className="relative block h-24 w-full overflow-hidden transition-transform duration-500 group-hover:scale-[1.04]">
+                      <Background id={item.id} colors={palette} light={theme === "light"} />
+                    </span>
                     <span className="flex items-center gap-2 px-3 py-2.5">
                       <span className="min-w-0 flex-1">
                         <span className="block text-[12px] font-medium">{item.name}</span>
@@ -320,10 +280,8 @@ export default function Settings({ profile, theme, onToggleTheme, onLogout }: Pr
             <p className="mt-4 text-[15px] font-medium">Оформление</p>
             <p className="mt-1 text-[12px] text-muted">Акцентный цвет, фон и тема</p>
 
-            <div
-              className="relative mt-4 h-24 overflow-hidden rounded-2xl border border-line"
-              style={preview(background)}
-            >
+            <div className="relative mt-4 h-24 overflow-hidden rounded-2xl border border-line">
+              <Background id={background} colors={palette} light={theme === "light"} />
               <span className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/40 px-2 py-1 text-[10px] font-medium text-white/85 backdrop-blur-md">
                 <span
                   className="h-2 w-2 rounded-full"

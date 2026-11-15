@@ -1,7 +1,7 @@
 "use client";
 
 import { levels } from "@/lib/audio";
-import { alpha, grainTexture, tone, useBackgroundCanvas } from "@/lib/background";
+import { alpha, grainTexture, tone, useBackgroundCanvas, wash } from "@/lib/background";
 import type { Palette } from "@/lib/palette";
 import { useAccentColor } from "@/lib/useAccentColor";
 
@@ -10,7 +10,7 @@ type Props = {
   light?: boolean;
 };
 
-export default function Weave({ light = false }: Props) {
+export default function Weave({ colors, light = false }: Props) {
   const accent = useAccentColor();
 
   const canvasRef = useBackgroundCanvas((ctx, width, height, time) => {
@@ -21,7 +21,8 @@ export default function Weave({ light = false }: Props) {
     const shift = (time * 5 + sound.bass * 6) % gap;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.lineWidth = 0.65;
+    wash(ctx, width, height, colors, light);
+    ctx.lineWidth = 0.75;
 
     for (let offset = -height; offset < width + height; offset += gap) {
       const x = offset + shift;
@@ -31,7 +32,7 @@ export default function Weave({ light = false }: Props) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x - height, height);
       ctx.strokeStyle = accentThread
-        ? alpha(accentTone, light ? 0.26 : 0.22)
+        ? alpha(accentTone, light ? 0.28 : 0.26)
         : `rgba(${ink},${light ? 0.13 : 0.11})`;
       ctx.stroke();
 
@@ -46,7 +47,7 @@ export default function Weave({ light = false }: Props) {
     const position = (time * 0.025) % 1;
     sweep.addColorStop(0, "transparent");
     sweep.addColorStop(Math.max(0, position - 0.16), "transparent");
-    sweep.addColorStop(position, light ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.09)");
+    sweep.addColorStop(position, light ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.12)");
     sweep.addColorStop(Math.min(1, position + 0.16), "transparent");
     sweep.addColorStop(1, "transparent");
     ctx.fillStyle = sweep;

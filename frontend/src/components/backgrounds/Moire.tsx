@@ -1,7 +1,7 @@
 "use client";
 
 import { levels } from "@/lib/audio";
-import { alpha, tone, useBackgroundCanvas } from "@/lib/background";
+import { alpha, tone, useBackgroundCanvas, wash } from "@/lib/background";
 import type { Palette } from "@/lib/palette";
 import { useAccentColor } from "@/lib/useAccentColor";
 
@@ -10,7 +10,7 @@ type Props = {
   light?: boolean;
 };
 
-export default function Moire({ light = false }: Props) {
+export default function Moire({ colors, light = false }: Props) {
   const accent = useAccentColor();
 
   const canvasRef = useBackgroundCanvas((ctx, width, height, time) => {
@@ -21,12 +21,13 @@ export default function Moire({ light = false }: Props) {
     const firstY = height * 0.5;
     const secondX = width * 0.62 + Math.sin(time * 0.13) * width * 0.025;
     const secondY = height * 0.58 + Math.cos(time * 0.11) * height * 0.025;
-    const gap = 12 + sound.bass * 1.5;
+    const gap = 10 + sound.bass * 1.2;
     const radius = Math.hypot(width, height) * 0.72;
     const count = Math.ceil(radius / gap);
 
     ctx.clearRect(0, 0, width, height);
-    ctx.lineWidth = 0.7;
+    wash(ctx, width, height, colors, light);
+    ctx.lineWidth = 0.8;
 
     for (let index = 1; index <= count; index += 1) {
       const distance = index * gap;
@@ -39,8 +40,8 @@ export default function Moire({ light = false }: Props) {
       ctx.beginPath();
       ctx.arc(secondX, secondY, distance, 0, Math.PI * 2);
       ctx.strokeStyle =
-        index % 9 === 0
-          ? alpha(accentTone, light ? 0.24 : 0.2)
+        index % 7 === 0
+          ? alpha(accentTone, light ? 0.28 : 0.26)
           : `rgba(${ink},${light ? 0.11 : 0.1})`;
       ctx.stroke();
     }

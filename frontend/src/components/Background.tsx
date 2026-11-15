@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 
 import type { Palette } from "@/lib/palette";
-import { useAppearance } from "@/store/appearanceStore";
+import { useAppearance, type BackgroundId } from "@/store/appearanceStore";
 
 const Aurora = dynamic(() => import("@/components/Aurora"), {
   ssr: false,
@@ -38,10 +38,12 @@ const Weave = dynamic(() => import("@/components/backgrounds/Weave"), {
 type Props = {
   colors: Palette;
   light?: boolean;
+  id?: BackgroundId;
 };
 
-export default function Background({ colors, light = false }: Props) {
-  const background = useAppearance((state) => state.background);
+export default function Background({ colors, light = false, id }: Props) {
+  const selected = useAppearance((state) => state.background);
+  const background = id ?? selected;
 
   if (background === "contour") return <Contour colors={colors} light={light} />;
   if (background === "moire") return <Moire colors={colors} light={light} />;
