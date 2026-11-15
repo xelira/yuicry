@@ -4,6 +4,7 @@ import { Play } from "lucide-react";
 
 import AssistantIcon from "@/components/AssistantIcon";
 import { coverSource } from "@/lib/audio";
+import { pluralRu } from "@/lib/plural";
 import type { AssistantMessage } from "@/store/assistantStore";
 import type { Track } from "@/store/playerStore";
 
@@ -15,7 +16,34 @@ type Props = {
 export default function AssistantMessageView({ message, onPlay }: Props) {
   if (message.role === "user") {
     return (
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1.5">
+        {message.attachment && (
+          <div className="flex max-w-[85%] items-center gap-2 rounded-xl border border-line bg-surface px-2 py-1.5">
+            {message.attachment.cover ? (
+              <img
+                src={coverSource(message.attachment.cover, "small")}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-md border border-line object-cover"
+              />
+            ) : (
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-surface2 text-muted">
+                <AssistantIcon size={15} />
+              </span>
+            )}
+
+            <span className="min-w-0">
+              <span className="block truncate text-[11px] font-medium text-ink">
+                {message.attachment.title}
+              </span>
+              <span className="block truncate text-[10px] text-muted">
+                {message.attachment.kind === "track"
+                  ? message.attachment.artist
+                  : `${message.attachment.count ?? 0} ${pluralRu(message.attachment.count ?? 0, "трек", "трека", "треков")}`}
+              </span>
+            </span>
+          </div>
+        )}
+
         <p className="max-w-[85%] rounded-2xl rounded-br-md bg-surface2 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink">
           {message.text}
         </p>

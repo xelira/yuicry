@@ -66,10 +66,11 @@ type Assistant struct {
 var errAssistantDisabled = errors.New("assistant: нет ключа")
 
 var (
-	playIntent      = regexp.MustCompile(`(?i)(включи|включай|поставь|сыграй|запусти|врубай)`)
-	musicIntent     = regexp.MustCompile(`(?i)(посоветуй|что послушать|похожее|трек|песн|альбом|исполнител|музык|подборк|жанр)`)
-	recommendIntent = regexp.MustCompile(`(?i)(посоветуй|посоветуйте|что послушать|похожее|похожие|подборк|рекоменд|найди|поищи|покажи треки|какую музыку)`)
-	numberIntent    = regexp.MustCompile(`(?i)(?:номер|№|под номером|песн[юя]|трек)\s*(\d{1,2})|(\d{1,2})\s*(?:-?й|трек|песн)`)
+	playIntent       = regexp.MustCompile(`(?i)(включи|включай|поставь|сыграй|запусти|врубай)`)
+	musicIntent      = regexp.MustCompile(`(?i)(посоветуй|что послушать|похожее|трек|песн|альбом|исполнител|музык|подборк|жанр)`)
+	recommendIntent  = regexp.MustCompile(`(?i)(посоветуй|посоветуйте|что послушать|похожее|похожие|подборк|рекоменд|найди|поищи|покажи треки|какую музыку)`)
+	numberIntent     = regexp.MustCompile(`(?i)(?:номер|№|под номером|песн[юя]|трек)\s*(\d{1,2})|(\d{1,2})\s*(?:-?й|трек|песн)`)
+	attachmentMarker = regexp.MustCompile(`(?m)^\[Вложение:[^\]]*\]\s*`)
 )
 
 func NewAssistant() *Assistant {
@@ -138,7 +139,7 @@ func (a *API) askAssistant(ctx context.Context, userID string, history []Assista
 	lastUser := ""
 	for index := len(history) - 1; index >= 0; index -= 1 {
 		if history[index].Role == "user" {
-			lastUser = history[index].Content
+			lastUser = userQuestion(history[index].Content)
 			break
 		}
 	}
@@ -486,6 +487,10 @@ func strongIntent(value string) bool {
 		strings.Contains(lower, "предыдущ") ||
 		strings.Contains(lower, "лайк") ||
 		strings.Contains(lower, "нравится")
+}
+
+func userQuestion(value string) string {
+	return strings.TrimSpace(attachmentMarker.ReplaceAllString(value, ""))
 }
 
 func parseIndex(value string) int {

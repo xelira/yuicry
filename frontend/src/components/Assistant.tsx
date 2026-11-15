@@ -13,6 +13,7 @@ import {
   stopSpeaking,
   type ListeningSession,
 } from "@/lib/speech";
+import { pluralRu } from "@/lib/plural";
 import { playWave } from "@/lib/wave";
 import { useAssistant } from "@/store/assistantStore";
 import { currentTrack, usePlayer, type Track } from "@/store/playerStore";
@@ -190,8 +191,13 @@ export default function Assistant() {
     stopSpeaking();
     setError("");
     setStatus("");
-    addMessage({ role: "user", text });
+
+    const pending = useAssistant.getState().attachment;
+    addMessage({ role: "user", text, attachment: pending ?? undefined });
     setInput("");
+
+    const requestContext = context();
+    detach();
     setBusy(true);
 
     try {
@@ -199,9 +205,14 @@ export default function Assistant() {
         .getState()
         .messages.filter((message) => !message.failed)
         .slice(-8)
-        .map((message) => ({ role: message.role, content: message.text }));
+        .map((message) => ({
+          role: message.role,
+          content: message.attachment
+            ? `${attachmentLabel(message.attachment)}\n${message.text}`
+            : message.text,
+        }));
 
-      const answer = await askAssistant(history, context());
+      const answer = await askAssistant(history, requestContext);
       addMessage({
         role: "assistant",
         text: answer.reply,
@@ -287,6 +298,14 @@ export default function Assistant() {
     setVoice(next);
     localStorage.setItem(voiceKey, next ? "1" : "0");
     if (!next) stopSpeaking();
+  };
+
+  const attachmentLabel = (value: NonNullable<ReturnType<typeof useAssistant.getState>["attachment"]>) => {
+    if (value.kind === "track") {
+      return `[Вложение: трек «${value.title}» — ${value.artist ?? "неизвестен"}]`;
+    }
+
+    return `[Вложение: плейлист «${value.title}» (${value.count ?? 0} ${pluralRu(value.count ?? 0, "трек", "трека", "треков")})]`;
   };
 
   const playTrack = (tracks: Track[], index: number) => {

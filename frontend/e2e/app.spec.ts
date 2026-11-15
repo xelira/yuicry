@@ -263,3 +263,31 @@ test("ассистент показывает избранные", async ({ page
   await expect(dialog.getByText("Из каталога · 2")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Слушать все" })).toBeVisible();
 });
+
+test("вложение уходит вместе с вопросом", async ({ page }) => {
+  let body: { context?: { attachment?: { kind?: string; title?: string } } } | null = null;
+
+  await page.route("**/api/assistant", (route) => {
+    body = route.request().postDataJSON();
+    return route.fulfill({
+      json: { reply: "Ок", action: "none", index: 0, tracks: [], sources: [] },
+    });
+  });
+
+  await page.getByRole("button", { name: "Поиск" }).click();
+  await page.getByPlaceholder("Название или исполнитель").fill("found");
+  await expect(page.getByText("Found Track")).toBeVisible();
+
+  await page.getByRole("button", { name: "Спросить у ассистента" }).first().click();
+
+  const dialog = page.getByRole("dialog", { name: "Ассистент" });
+  await expect(dialog.getByText("Found Track")).toBeVisible();
+
+  await dialog.getByLabel("Вопрос ассистенту").fill("что это за трек?");
+  await dialog.getByRole("button", { name: "Отправить" }).click();
+
+  await expect(dialog.getByText("что это за трек?")).toBeVisible();
+  await expect(dialog.getByText("Found Track")).toBeVisible();
+
+  expect(body?.context?.attachment).toMatchObject({ kind: "track", title: "Found Track" });
+});

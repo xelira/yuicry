@@ -9,6 +9,7 @@ export type AssistantMessage = {
   text: string;
   tracks?: Track[];
   sources?: AssistantSource[];
+  attachment?: AssistantAttachment;
   failed?: boolean;
 };
 
