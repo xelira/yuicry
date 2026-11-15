@@ -27,6 +27,7 @@ precision highp float;
 
 uniform float uTime;
 uniform float uBass;
+uniform int uSteps;
 uniform float uLight;
 uniform vec2 uResolution;
 uniform vec2 uShift;
@@ -156,6 +157,8 @@ void main() {
   float halo = 0.0;
 
   for (int i = 0; i < STEPS; i++) {
+    if (i >= uSteps) break;
+
     float r2 = dot(pos, pos);
 
     if (r2 < HORIZON * HORIZON) {
@@ -623,6 +626,7 @@ function BlackHoleScene({ colors, light = false }: Props) {
 
       const time = uniform(sceneProgram, "uTime");
       const bass = uniform(sceneProgram, "uBass");
+      const steps = uniform(sceneProgram, "uSteps");
       const lightUniform = uniform(sceneProgram, "uLight");
       const resolution = uniform(sceneProgram, "uResolution");
       const shift = uniform(sceneProgram, "uShift");
@@ -641,7 +645,7 @@ function BlackHoleScene({ colors, light = false }: Props) {
       let lost = false;
       let visible = !document.hidden;
       let lastDraw = 0;
-      let quality = 0.8;
+      let quality = 0.9;
       let tunedAt = 0;
       let bufferWidth = 2;
       let bufferHeight = 2;
@@ -718,14 +722,14 @@ function BlackHoleScene({ colors, light = false }: Props) {
 
         lightMix += (lightTarget.current - lightMix) * 0.08;
 
-        if (now - tunedAt > 1600) {
+        if (now - tunedAt > 2000) {
           tunedAt = now;
 
-          if (now - lastDraw > 52 && quality > 0.38) {
-            quality = Math.max(0.38, quality * 0.86);
+          if (now - lastDraw > 62 && quality > 0.62) {
+            quality = Math.max(0.62, quality * 0.9);
             resize();
-          } else if (now - lastDraw < 38 && quality < 0.8) {
-            quality = Math.min(0.8, quality * 1.14);
+          } else if (now - lastDraw < 40 && quality < 0.9) {
+            quality = Math.min(0.9, quality * 1.1);
             resize();
           }
         }
@@ -739,6 +743,7 @@ function BlackHoleScene({ colors, light = false }: Props) {
         gl.uniform3f(deep, current[2][0], current[2][1], current[2][2]);
         gl.uniform1f(time, (performance.now() - started) / 1000);
         gl.uniform1f(bass, sound.bass);
+        gl.uniform1i(steps, quality <= 0.64 ? 104 : 150);
         gl.uniform1f(lightUniform, lightMix);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
