@@ -645,8 +645,6 @@ function BlackHoleScene({ colors, light = false }: Props) {
       let lost = false;
       let visible = !document.hidden;
       let lastDraw = 0;
-      let quality = 0.9;
-      let tunedAt = 0;
       let bufferWidth = 2;
       let bufferHeight = 2;
       const started = performance.now();
@@ -659,9 +657,11 @@ function BlackHoleScene({ colors, light = false }: Props) {
         const height = holder.clientHeight;
         if (width === 0 || height === 0) return;
 
-        const ratio = Math.min(window.devicePixelRatio || 1, 2);
-        bufferWidth = Math.max(2, Math.round(width * ratio * quality));
-        bufferHeight = Math.max(2, Math.round(height * ratio * quality));
+        const ratio = Math.min(window.devicePixelRatio || 1, 1.25);
+        const scale = Math.min(1, 1600 / Math.max(width * ratio, 1));
+
+        bufferWidth = Math.max(2, Math.round(width * ratio * scale));
+        bufferHeight = Math.max(2, Math.round(height * ratio * scale));
 
         if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
           canvas.width = bufferWidth;
@@ -722,18 +722,6 @@ function BlackHoleScene({ colors, light = false }: Props) {
 
         lightMix += (lightTarget.current - lightMix) * 0.08;
 
-        if (now - tunedAt > 2000) {
-          tunedAt = now;
-
-          if (now - lastDraw > 62 && quality > 0.62) {
-            quality = Math.max(0.62, quality * 0.9);
-            resize();
-          } else if (now - lastDraw < 40 && quality < 0.9) {
-            quality = Math.min(0.9, quality * 1.1);
-            resize();
-          }
-        }
-
         gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
         gl.viewport(0, 0, bufferWidth, bufferHeight);
         bindQuad(sceneProgram);
@@ -743,7 +731,7 @@ function BlackHoleScene({ colors, light = false }: Props) {
         gl.uniform3f(deep, current[2][0], current[2][1], current[2][2]);
         gl.uniform1f(time, (performance.now() - started) / 1000);
         gl.uniform1f(bass, sound.bass);
-        gl.uniform1i(steps, quality <= 0.64 ? 104 : 150);
+        gl.uniform1i(steps, bufferWidth < 900 ? 120 : 150);
         gl.uniform1f(lightUniform, lightMix);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
