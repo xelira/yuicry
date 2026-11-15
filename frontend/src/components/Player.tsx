@@ -98,6 +98,8 @@ export default function Player() {
         <SeekBar
           time={time}
           duration={duration}
+          buffering={buffering}
+          loadProgress={progress}
           onSeek={seekTo}
           onSeekEnd={() => hostSeek(audioElement().currentTime || 0)}
           labels

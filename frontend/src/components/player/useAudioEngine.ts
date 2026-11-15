@@ -91,6 +91,8 @@ export function useAudioEngine(track: Track | null, options: Options) {
     const controller = new AbortController();
     let cancelled = false;
 
+    audio.pause();
+
     const restoreAt =
       options.restoring.current && options.pendingSeek.current > 0
         ? options.pendingSeek.current
@@ -176,11 +178,7 @@ export function useAudioEngine(track: Track | null, options: Options) {
       const current = state.queue[state.index];
       const full = current?.duration || 0;
 
-      if (media > 0 && full > 35 && media < 32 && !audio.src.startsWith("blob:")) {
-        setDuration(full);
-      } else {
-        setDuration(media || full);
-      }
+      setDuration(media || full);
     };
     const onWaiting = () => setBuffering(true);
     const onPlaying = () => setBuffering(false);

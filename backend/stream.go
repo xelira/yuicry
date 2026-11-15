@@ -269,14 +269,6 @@ func (s *Streamer) download(ctx context.Context, id string, report func(int64, i
 		log.Printf("soundcloud %s: %v", id, err)
 	}
 
-	if track.Preview != "" {
-		if data, err := s.fromPreview(ctx, track.Preview); err == nil {
-			return data, nil
-		} else {
-			log.Printf("preview %s: %v", id, err)
-		}
-	}
-
 	return nil, errors.New("источник недоступен")
 }
 
@@ -394,25 +386,6 @@ func (s *Streamer) fetchAudio(ctx context.Context, id string, extra []string, re
 	}
 
 	return nil, errors.New("yt-dlp не оставил файл")
-}
-
-func (s *Streamer) fromPreview(ctx context.Context, preview string) ([]byte, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, preview, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	response, err := s.Client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("preview: %s", response.Status)
-	}
-
-	return io.ReadAll(io.LimitReader(response.Body, 12<<20))
 }
 
 func (s *Streamer) upload(id string, data []byte) error {

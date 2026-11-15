@@ -72,7 +72,6 @@ func main() {
 	})
 	mux.HandleFunc("GET /api/search", api.handleSearch)
 	mux.HandleFunc("GET /api/stream/{id}", streamer.Handle)
-	mux.HandleFunc("GET /api/preview/{id}", api.handlePreview)
 	mux.HandleFunc("POST /api/download/{id}", api.handleDownloadStart)
 	mux.HandleFunc("GET /api/download/{id}", api.handleDownloadStatus)
 	mux.HandleFunc("GET /api/download/{id}/events", api.handleDownloadEvents)

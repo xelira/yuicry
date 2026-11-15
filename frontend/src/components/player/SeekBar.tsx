@@ -7,12 +7,22 @@ import { formatTime } from "./format";
 type Props = {
   time: number;
   duration: number;
+  buffering?: boolean;
+  loadProgress?: number;
   onSeek: (seconds: number) => void;
   onSeekEnd: () => void;
   labels?: boolean;
 };
 
-export default function SeekBar({ time, duration, onSeek, onSeekEnd, labels = false }: Props) {
+export default function SeekBar({
+  time,
+  duration,
+  buffering = false,
+  loadProgress = 0,
+  onSeek,
+  onSeekEnd,
+  labels = false,
+}: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -36,6 +46,7 @@ export default function SeekBar({ time, duration, onSeek, onSeekEnd, labels = fa
         aria-valuemin={0}
         aria-valuemax={Math.round(duration)}
         aria-valuenow={Math.round(time)}
+        aria-busy={buffering}
         className="group relative h-4 w-full cursor-pointer touch-none"
         onPointerDown={(event) => {
           setDragging(true);
@@ -51,17 +62,29 @@ export default function SeekBar({ time, duration, onSeek, onSeekEnd, labels = fa
           onSeekEnd();
         }}
       >
-        <div className="absolute inset-x-0 top-[5px] h-[6px] rounded-full bg-line" />
+        <div className="absolute inset-x-0 top-[5px] h-[6px] overflow-hidden rounded-full bg-line">
+          {buffering &&
+            (loadProgress > 0 ? (
+              <div
+                className="absolute inset-y-0 left-0 rounded-full bg-accent/45 transition-[width] duration-300"
+                style={{ width: `${Math.min(100, Math.max(3, loadProgress))}%` }}
+              />
+            ) : (
+              <div className="absolute inset-y-0 left-0 w-1/3 animate-[loading-slide_1.2s_ease-in-out_infinite] rounded-full bg-accent/45" />
+            ))}
+        </div>
         <div
           className="absolute top-[5px] h-[6px] rounded-full bg-accent"
           style={{ width: `${progress * 100}%` }}
         />
-        <span
-          className={`absolute top-[1px] h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-accent ${
-            dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          }`}
-          style={{ left: `${Math.min(99, Math.max(1, progress * 100))}%` }}
-        />
+        {!buffering && (
+          <span
+            className={`absolute top-[1px] h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-accent ${
+              dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+            style={{ left: `${Math.min(99, Math.max(1, progress * 100))}%` }}
+          />
+        )}
       </div>
 
       {labels && (

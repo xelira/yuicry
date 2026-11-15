@@ -21,7 +21,6 @@ type Track struct {
 	ArtistID string `json:"artist_id"`
 	Album    string `json:"album"`
 	AlbumID  string `json:"album_id"`
-	Preview  string `json:"-"`
 }
 
 type Artist struct {
@@ -71,7 +70,6 @@ type deezerTrack struct {
 		CoverBig string      `json:"cover_big"`
 		CoverXL  string      `json:"cover_xl"`
 	} `json:"album"`
-	Preview string `json:"preview"`
 }
 
 type deezerList struct {
@@ -489,6 +487,5 @@ func convertTrack(raw deezerTrack) Track {
 		AlbumID:  raw.Album.ID.String(),
 		Duration: raw.Duration,
 		Cover:    cover,
-		Preview:  raw.Preview,
 	}
 }

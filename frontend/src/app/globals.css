@@ -297,6 +297,15 @@ audio {
   }
 }
 
+@keyframes loading-slide {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
 @keyframes recognize-ring {
   from {
     opacity: 0.45;

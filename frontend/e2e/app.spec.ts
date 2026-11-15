@@ -40,7 +40,9 @@ async function mockApi(page: Page) {
   await page.route("**/api/preview/**", (route) =>
     route.fulfill({ status: 200, contentType: "audio/mpeg", body: Buffer.alloc(2048) }),
   );
-  await page.route("**/api/download/**", (route) => route.fulfill({ status: 202, json: {} }));
+  await page.route("**/api/download/**", (route) =>
+    route.fulfill({ status: 200, json: { state: "done", percent: 100 } }),
+  );
   await page.route("**/api/tts?*", (route) =>
     route.fulfill({ status: 200, contentType: "audio/mpeg", body: Buffer.alloc(128) }),
   );

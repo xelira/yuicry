@@ -73,21 +73,13 @@ export function streamSource(id: string) {
   return `/api/stream/${id}?v=2`;
 }
 
-export function previewSource(id: string) {
-  return `/api/preview/${id}?v=2`;
-}
-
 export function playTrack(id: string) {
+  void id;
+
   const audio = audioElement();
-  const url = previewSource(id);
-  const absolute = new URL(url, window.location.origin).href;
-
-  if (audio.src !== absolute) {
-    audio.src = url;
-    audio.load();
-  }
-
-  void audio.play().catch(() => undefined);
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
 }
 
 export function warmTrack(id: string) {

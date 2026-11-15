@@ -57,6 +57,7 @@ export default function NowPlaying() {
 
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [buffering, setBuffering] = useState(false);
   const [palette, setPalette] = useState<Palette>(fallbackPalette);
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
@@ -118,29 +119,34 @@ export default function NowPlaying() {
 
     const audio = audioElement();
     const updateDuration = () => {
-      const media = audio.duration || 0;
-      const full = track?.duration || 0;
-
-      if (media > 0 && full > 35 && media < 32 && !audio.src.startsWith("blob:")) {
-        setDuration(full);
-      } else {
-        setDuration(media || full);
-      }
+      setDuration(audio.duration || track?.duration || 0);
     };
 
     const onTime = () => setTime(audio.currentTime);
     const onMeta = () => updateDuration();
+    const onWaiting = () => setBuffering(true);
+    const onPlaying = () => setBuffering(false);
+    const onLoadStart = () => setBuffering(true);
 
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onMeta);
+    audio.addEventListener("waiting", onWaiting);
+    audio.addEventListener("playing", onPlaying);
+    audio.addEventListener("canplay", onPlaying);
+    audio.addEventListener("loadstart", onLoadStart);
 
     setTime(audio.currentTime);
     updateDuration();
+    setBuffering(audio.readyState < 3);
     document.body.style.overflow = "hidden";
 
     return () => {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onMeta);
+      audio.removeEventListener("waiting", onWaiting);
+      audio.removeEventListener("playing", onPlaying);
+      audio.removeEventListener("canplay", onPlaying);
+      audio.removeEventListener("loadstart", onLoadStart);
       document.body.style.overflow = "";
     };
   }, [open, track?.id]);
@@ -397,15 +403,21 @@ export default function NowPlaying() {
             }}
             onPointerUp={() => hostSeek(audioElement().currentTime || 0)}
           >
-            <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 rounded-full bg-white/25" />
+            <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-white/25">
+              {buffering && (
+                <div className="absolute inset-y-0 left-0 w-1/3 animate-[loading-slide_1.2s_ease-in-out_infinite] rounded-full bg-accent/60" />
+              )}
+            </div>
             <div
               className="absolute top-1/2 h-[6px] -translate-y-1/2 rounded-full bg-white"
               style={{ width: `${progress * 100}%` }}
             />
-            <span
-              className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-lg"
-              style={{ left: `${progress * 100}%` }}
-            />
+            {!buffering && (
+              <span
+                className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-lg"
+                style={{ left: `${progress * 100}%` }}
+              />
+            )}
           </div>
 
           <div className="mt-1 flex justify-between text-[12px] tabular-nums text-white/70">
