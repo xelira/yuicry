@@ -71,7 +71,7 @@ float fbm(vec2 p) {
 void main() {
   vec2 uv = vUv;
   float aspect = uResolution.x / max(uResolution.y, 1.0);
-  vec2 p = (uv - 0.5) * vec2(aspect, 1.0) * 2.2;
+  vec2 p = (uv - 0.5) * vec2(aspect * 1.35, 1.0) * 2.2;
 
   float t = uTime * 0.055 + uBass * 0.04;
 

@@ -117,14 +117,19 @@ export default function Search() {
   };
 
   return (
-    <section className="pt-8">
-      <div className="aurora-text flex items-center justify-between pb-4">
-        <p className="text-[12px] text-muted">
-          {asked ? `${tracks.length}${more ? "+" : ""} треков` : "Каталог Deezer"}
-        </p>
+    <section className="mx-auto w-full max-w-[760px] pt-8">
+      <div className="aurora-text flex items-end justify-between gap-4 pb-4">
+        <div className="min-w-0">
+          <h1 className="text-[19px] font-semibold tracking-tight">Каталог Deezer</h1>
+          <p className="mt-1 text-[12.5px] text-muted">
+            {asked
+              ? `Нашлось ${tracks.length}${more ? "+" : ""} треков`
+              : "Найди трек, альбом или исполнителя"}
+          </p>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3 rounded-xl border border-line bg-bg px-4 shadow-lift transition-colors focus-within:border-lineStrong focus-within:ring-2 focus-within:ring-accent/15">
+      <div className="flex items-center gap-3 rounded-2xl border border-line bg-bg/75 px-4 backdrop-blur-xl transition-colors focus-within:border-lineStrong focus-within:ring-2 focus-within:ring-accent/15">
         <SearchIcon size={15} className="text-muted" />
         <input
           ref={inputRef}
