@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Heart, Loader2, Mic, Play, RotateCcw, Square, X } from "lucide-react";
+import { Heart, Mic, Play, RotateCcw, Square, X } from "lucide-react";
 
 import RecognizeIcon from "@/components/RecognizeIcon";
 import { coverSource } from "@/lib/audio";
@@ -21,6 +21,7 @@ type Recognition = {
 type Phase = "idle" | "recording" | "searching" | "result" | "error";
 
 const duration = 9;
+const bars = 34;
 
 export default function Recognize() {
   const open = useRecognize((state) => state.open);
@@ -34,6 +35,7 @@ export default function Recognize() {
   const [seconds, setSeconds] = useState(0);
   const [result, setResult] = useState<Recognition | null>(null);
   const [error, setError] = useState("");
+  const [brokenCover, setBrokenCover] = useState(false);
 
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -42,6 +44,13 @@ export default function Recognize() {
   const controller = useRef<AbortController | null>(null);
   const cancelled = useRef(false);
 
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const audioContext = useRef<AudioContext | null>(null);
+  const analyser = useRef<AnalyserNode | null>(null);
+  const animation = useRef<number | null>(null);
+  const peaks = useRef<number[]>([]);
+  const loudness = useRef(0.08);
+
   const clearTimer = () => {
     if (timer.current !== null) {
       window.clearInterval(timer.current);
@@ -49,7 +58,152 @@ export default function Recognize() {
     }
   };
 
+  const paint = () => {
+    animation.current = null;
+
+    const element = canvas.current;
+    const node = analyser.current;
+
+    if (!element) {
+      if (node) animation.current = window.requestAnimationFrame(paint);
+      return;
+    }
+
+    const context = element.getContext("2d");
+    if (!context) {
+      if (node) animation.current = window.requestAnimationFrame(paint);
+      return;
+    }
+
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const width = element.clientWidth;
+    const height = element.clientHeight;
+    if (!width || !height) {
+      if (node) animation.current = window.requestAnimationFrame(paint);
+      return;
+    }
+
+    if (element.width !== Math.round(width * ratio) || element.height !== Math.round(height * ratio)) {
+      element.width = Math.round(width * ratio);
+      element.height = Math.round(height * ratio);
+    }
+
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = getComputedStyle(element).color || "#ff5a36";
+
+    if (!node) {
+      context.globalAlpha = 0.22;
+      context.fillRect(0, height / 2 - 0.5, width, 1);
+      context.globalAlpha = 1;
+      return;
+    }
+
+    if (peaks.current.length !== bars) peaks.current = new Array(bars).fill(0);
+
+    const data = new Uint8Array(node.frequencyBinCount);
+    node.getByteFrequencyData(data);
+
+    const gap = 2;
+    const barWidth = Math.max(1.5, (width - gap * (bars - 1)) / bars);
+    const lowest = 1;
+    const highest = Math.max(lowest + 1, Math.min(data.length - 1, 180));
+    const curve = Math.pow(highest / lowest, 1 / bars);
+
+    const raw: number[] = [];
+    let energy = 0;
+
+    for (let index = 0; index < bars; index += 1) {
+      const from = Math.floor(lowest * Math.pow(curve, index));
+      const to = Math.max(from + 1, Math.floor(lowest * Math.pow(curve, index + 1)));
+
+      let peak = 0;
+      for (let bin = from; bin < to; bin += 1) {
+        if (data[bin] > peak) peak = data[bin];
+      }
+
+      const normalized = peak / 255;
+      if (normalized > energy) energy = normalized;
+
+      const tilt = 0.55 + 1.9 * (index / bars);
+      raw.push(Math.pow(normalized, 1.2) * tilt);
+    }
+
+    let loudest = 0;
+    for (const value of raw) if (value > loudest) loudest = value;
+
+    loudness.current = Math.max(loudest, loudness.current * 0.9, 0.08);
+    const target = Math.min(1, 1 / loudness.current);
+    const gate = Math.max(0, Math.min(1, (energy - 0.03) / 0.05));
+
+    for (let index = 0; index < bars; index += 1) {
+      const value = Math.min(1, raw[index] * target) * gate;
+      peaks.current[index] = peaks.current[index] * 0.55 + value * 0.45;
+
+      const barHeight = Math.max(1.5, peaks.current[index] * height * 0.9);
+      const x = index * (barWidth + gap);
+      const y = (height - barHeight) / 2;
+
+      context.globalAlpha = 0.35 + peaks.current[index] * 0.65;
+      context.beginPath();
+
+      if (typeof context.roundRect === "function") {
+        context.roundRect(x, y, barWidth, barHeight, barWidth / 2);
+      } else {
+        context.rect(x, y, barWidth, barHeight);
+      }
+
+      context.fill();
+    }
+
+    context.globalAlpha = 1;
+    animation.current = window.requestAnimationFrame(paint);
+  };
+
+  const startWaveform = (media: MediaStream) => {
+    const Context = window.AudioContext;
+
+    if (!Context) {
+      paint();
+      return;
+    }
+
+    const context = new Context();
+    const source = context.createMediaStreamSource(media);
+    const node = context.createAnalyser();
+
+    node.fftSize = 2048;
+    node.smoothingTimeConstant = 0.72;
+    source.connect(node);
+
+    audioContext.current = context;
+    analyser.current = node;
+    peaks.current = new Array(bars).fill(0);
+    loudness.current = 0.08;
+
+    if (context.state === "suspended") void context.resume();
+    if (animation.current !== null) window.cancelAnimationFrame(animation.current);
+
+    paint();
+  };
+
+  const stopWaveform = () => {
+    if (animation.current !== null) {
+      window.cancelAnimationFrame(animation.current);
+      animation.current = null;
+    }
+
+    analyser.current = null;
+
+    const context = audioContext.current;
+    audioContext.current = null;
+
+    if (context && context.state !== "closed") void context.close();
+    paint();
+  };
+
   const stopTracks = () => {
+    stopWaveform();
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
   };
@@ -100,6 +254,7 @@ export default function Recognize() {
       }
 
       const data = (await response.json()) as Recognition;
+      setBrokenCover(false);
       setResult(data);
       setPhase("result");
     } catch (failure) {
@@ -116,6 +271,7 @@ export default function Recognize() {
     setError("");
     setResult(null);
     setSeconds(0);
+    setBrokenCover(false);
     cancelled.current = false;
 
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -164,6 +320,7 @@ export default function Recognize() {
       mediaRecorder.start();
       setPhase("recording");
       setSeconds(0);
+      startWaveform(media);
 
       timer.current = window.setInterval(() => {
         setSeconds((value) => {
@@ -196,6 +353,7 @@ export default function Recognize() {
     setResult(null);
     setError("");
     setSeconds(0);
+    setBrokenCover(false);
   };
 
   useEffect(() => {
@@ -220,15 +378,25 @@ export default function Recognize() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  useEffect(() => {
+    return () => {
+      if (animation.current !== null) window.cancelAnimationFrame(animation.current);
+      const context = audioContext.current;
+      audioContext.current = null;
+      if (context && context.state !== "closed") void context.close();
+    };
+  }, []);
+
   if (!open) return null;
 
   const track = result?.tracks[0];
   const liked = track ? Boolean(likes[track.id]) : false;
   const progress = Math.min(seconds / duration, 1);
+  const cover = result ? result.cover || track?.cover_big || "" : "";
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px] animate-[fade-in_.2s_ease-out]"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[3px] animate-[fade-in_.18s_ease-out]"
       onClick={close}
     >
       <div
@@ -236,143 +404,151 @@ export default function Recognize() {
         aria-modal="true"
         aria-label="Узнать музыку"
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-[520px] overflow-hidden rounded-[28px] border border-line bg-bg shadow-2xl animate-[sheet-in_.35s_cubic-bezier(.22,1,.36,1)]"
+        className="relative w-full max-w-[400px] overflow-hidden rounded-[26px] border border-line bg-bg p-6 shadow-2xl animate-[sheet-in_.3s_cubic-bezier(.22,1,.36,1)]"
       >
-        <header className="flex items-center gap-3 border-b border-line px-5 py-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink">
-            <RecognizeIcon size={20} />
-          </span>
+        <button
+          onClick={close}
+          aria-label="Закрыть"
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink"
+        >
+          <X size={17} />
+        </button>
 
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold tracking-tight text-ink">Узнать музыку</h2>
-            <p className="text-[11px] text-muted">
-              {phase === "recording"
-                ? "Слушаю…"
-                : phase === "searching"
-                  ? "Ищу совпадение…"
-                  : "Определю трек по звуку"}
+        {phase === "idle" && (
+          <div>
+            <h2 className="pr-10 text-[19px] font-semibold tracking-tight text-ink">Узнать музыку</h2>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              Включи трек рядом и нажми — послушаю 9 секунд.
+            </p>
+
+            <button
+              onClick={() => void start()}
+              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[13px] font-medium text-accentText transition hover:brightness-110 active:scale-[0.99]"
+            >
+              <Mic size={16} />
+              Слушать
+            </button>
+
+            <p className="mt-3 text-center text-[11px] text-muted">
+              Точнее — ближе к источнику и без лишнего шума.
             </p>
           </div>
+        )}
 
-          <button
-            onClick={close}
-            aria-label="Закрыть"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink"
-          >
-            <X size={19} />
-          </button>
-        </header>
-
-        <div className="p-5 sm:p-6">
-          {phase === "idle" && (
-            <div className="flex flex-col items-center py-5 text-center">
-              <div className="relative flex h-44 w-44 items-center justify-center">
-                <span className="absolute inset-0 rounded-full border border-line" />
-                <span className="absolute inset-5 rounded-full border border-line" />
-                <span className="absolute inset-10 rounded-full border border-line" />
-                <button
-                  onClick={() => void start()}
-                  aria-label="Начать запись"
-                  className="relative flex h-20 w-20 items-center justify-center rounded-full bg-accent text-accentText shadow-[0_0_50px_-14px_var(--accent)] transition hover:brightness-110"
-                >
-                  <Mic size={28} />
-                </button>
-              </div>
-
-              <p className="mt-5 text-[14px] font-medium text-ink">Включи музыку рядом</p>
-              <p className="mt-1 max-w-[300px] text-[12px] leading-relaxed text-muted">
-                Нажми и подержи телефон рядом с колонкой. Слушаю {duration} секунд.
-              </p>
+        {phase === "recording" && (
+          <div>
+            <div className="flex items-center gap-2 pr-10">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+              <h2 className="text-[19px] font-semibold tracking-tight text-ink">Слушаю</h2>
             </div>
-          )}
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              Держи телефон рядом с музыкой.
+            </p>
 
-          {phase === "recording" && (
-            <div className="flex flex-col items-center py-5 text-center">
-              <div className="relative flex h-44 w-44 items-center justify-center">
-                {[0, 0.6, 1.2].map((delay) => (
-                  <span
-                    key={delay}
-                    className="absolute inset-0 rounded-full border border-accent/40"
-                    style={{ animation: `recognize-ring 2s ease-out ${delay}s infinite` }}
-                  />
-                ))}
+            <div className="mt-5 h-20 rounded-2xl border border-line bg-surface">
+              <canvas ref={canvas} className="h-full w-full text-accent" aria-hidden="true" />
+            </div>
 
-                <button
-                  onClick={stopRecording}
-                  aria-label="Остановить запись"
-                  className="relative flex h-20 w-20 items-center justify-center rounded-full bg-accent text-accentText shadow-[0_0_50px_-14px_var(--accent)]"
-                >
-                  <Square size={22} fill="currentColor" />
-                </button>
-              </div>
-
-              <div className="mt-4 flex h-5 items-end gap-1" aria-hidden="true">
-                {[0.45, 0.9, 0.6, 1, 0.55, 0.8, 0.4].map((value, index) => (
-                  <span
-                    key={index}
-                    className="w-1 origin-bottom rounded-full bg-accent"
-                    style={{
-                      height: `${value * 100}%`,
-                      animation: `wave 1s ease-in-out ${index * 0.1}s infinite`,
-                    }}
-                  />
-                ))}
-              </div>
-
-              <p className="mt-3 text-[14px] font-medium text-ink">Слушаю…</p>
-              <p className="mt-1 text-[12px] tabular-nums text-muted">
-                {seconds} / {duration} сек
-              </p>
-
-              <div className="mt-3 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-surface2">
+            <div className="mt-4 flex items-center gap-3">
+              <div className="h-0.5 flex-1 overflow-hidden rounded-full bg-line">
                 <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-1000"
+                  className="h-full rounded-full bg-accent transition-[width] duration-1000 ease-linear"
                   style={{ width: `${progress * 100}%` }}
                 />
               </div>
+              <span className="shrink-0 text-[11px] tabular-nums text-muted">
+                {seconds} / {duration}
+              </span>
             </div>
-          )}
 
-          {phase === "searching" && (
-            <div className="flex flex-col items-center py-12 text-center">
-              <Loader2 size={34} className="animate-spin text-accent" />
-              <p className="mt-4 text-[14px] font-medium text-ink">Ищу совпадение…</p>
-              <p className="mt-1 text-[12px] text-muted">Сверяю запись с базой Shazam</p>
+            <button
+              onClick={stopRecording}
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full border border-line text-[13px] font-medium text-ink transition-colors hover:border-lineStrong hover:bg-surface2"
+            >
+              <Square size={13} fill="currentColor" />
+              Остановить
+            </button>
+          </div>
+        )}
+
+        {phase === "searching" && (
+          <div>
+            <h2 className="pr-10 text-[19px] font-semibold tracking-tight text-ink">Ищу совпадение</h2>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              Сверяю запись с базой Shazam. Обычно пара секунд.
+            </p>
+
+            <div className="mt-5 flex items-center gap-4 rounded-2xl border border-line bg-surface p-3">
+              <div className="h-16 w-16 shrink-0 animate-pulse rounded-xl bg-surface2" />
+              <div className="min-w-0 flex-1 space-y-2.5">
+                <div className="h-3 w-3/4 animate-pulse rounded-full bg-surface2" />
+                <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-surface2" />
+                <div className="h-2.5 w-1/3 animate-pulse rounded-full bg-surface2" />
+              </div>
             </div>
-          )}
 
-          {phase === "result" && result && (
-            <div className="flex flex-col items-center text-center">
-              <img
-                src={coverSource(result.cover || track?.cover_big || "", "large")}
-                alt=""
-                className="h-40 w-40 rounded-2xl border border-line object-cover shadow-2xl sm:h-48 sm:w-48"
-              />
+            <div className="mt-4 h-0.5 overflow-hidden rounded-full bg-line">
+              <div className="h-full w-1/3 animate-[loading-slide_1.3s_ease-in-out_infinite] rounded-full bg-accent" />
+            </div>
 
-              <h3 className="mt-5 line-clamp-2 text-[22px] font-semibold leading-tight tracking-tight text-ink">
-                {result.title}
-              </h3>
-              <p className="mt-1 text-[13px] text-muted">{result.artist}</p>
-              {result.album && <p className="mt-0.5 text-[11px] text-muted/80">{result.album}</p>}
+            <button
+              onClick={close}
+              className="mt-5 flex h-11 w-full items-center justify-center rounded-full text-[12.5px] text-muted transition-colors hover:bg-surface2 hover:text-ink"
+            >
+              Отменить
+            </button>
+          </div>
+        )}
 
-              {track ? (
-                <div className="mt-5 flex w-full flex-wrap justify-center gap-2">
-                  <button
-                    onClick={() => {
-                      playQueue(result.tracks, 0);
-                      close();
-                    }}
-                    className="flex h-11 items-center gap-2 rounded-full bg-accent px-5 text-[12px] font-medium text-accentText shadow-[0_0_28px_-12px_var(--accent)] transition hover:brightness-110"
-                  >
-                    <Play size={13} fill="currentColor" />
-                    Слушать
-                  </button>
+        {phase === "result" && result && (
+          <div>
+            <h2 className="pr-10 text-[19px] font-semibold tracking-tight text-ink">Нашёл</h2>
 
+            <div className="mt-5 flex items-center gap-4">
+              <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-line bg-surface2">
+                <span className="absolute inset-0 flex items-center justify-center text-muted">
+                  <RecognizeIcon size={22} />
+                </span>
+                {cover && !brokenCover && (
+                  <img
+                    src={coverSource(cover, "medium")}
+                    alt=""
+                    onError={() => setBrokenCover(true)}
+                    className="relative h-full w-full object-cover"
+                  />
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold leading-snug tracking-tight text-ink">
+                  {result.title}
+                </p>
+                <p className="mt-0.5 truncate text-[12.5px] text-muted">{result.artist}</p>
+                {result.album && (
+                  <p className="mt-0.5 truncate text-[11px] text-muted/80">{result.album}</p>
+                )}
+              </div>
+            </div>
+
+            {track ? (
+              <>
+                <button
+                  onClick={() => {
+                    playQueue(result.tracks, 0);
+                    close();
+                  }}
+                  className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[13px] font-medium text-accentText transition hover:brightness-110 active:scale-[0.99]"
+                >
+                  <Play size={14} fill="currentColor" />
+                  Слушать
+                </button>
+
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => void toggleLike(track)}
-                    className={`flex h-11 items-center gap-2 rounded-full border px-4 text-[12px] transition-colors ${
+                    className={`flex h-11 items-center justify-center gap-2 rounded-full border text-[12.5px] transition-colors ${
                       liked
-                        ? "border-accent/50 bg-accent/10 text-accent"
+                        ? "border-accent/40 bg-accent/10 text-accent"
                         : "border-line text-muted hover:border-lineStrong hover:text-ink"
                     }`}
                   >
@@ -382,43 +558,51 @@ export default function Recognize() {
 
                   <button
                     onClick={() => void start()}
-                    className="flex h-11 items-center gap-2 rounded-full border border-line px-4 text-[12px] text-muted transition-colors hover:border-lineStrong hover:text-ink"
+                    className="flex h-11 items-center justify-center gap-2 rounded-full border border-line text-[12.5px] text-muted transition-colors hover:border-lineStrong hover:text-ink"
                   >
                     <RotateCcw size={14} />
                     Ещё раз
                   </button>
                 </div>
-              ) : (
-                <div className="mt-5 flex flex-col items-center gap-3">
-                  <p className="text-[12px] text-muted">В каталоге Deezer этот трек не нашёлся.</p>
-                  <button
-                    onClick={() => void start()}
-                    className="flex h-10 items-center gap-2 rounded-full border border-line px-4 text-[12px] text-muted transition-colors hover:border-lineStrong hover:text-ink"
-                  >
-                    <RotateCcw size={14} />
-                    Ещё раз
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+              </>
+            ) : (
+              <>
+                <p className="mt-4 text-[12px] leading-relaxed text-muted">
+                  В каталоге Deezer этот трек не нашёлся.
+                </p>
+                <button
+                  onClick={() => void start()}
+                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full border border-line text-[12.5px] text-ink transition-colors hover:border-lineStrong hover:bg-surface2"
+                >
+                  <RotateCcw size={14} />
+                  Ещё раз
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
-          {phase === "error" && (
-            <div className="flex flex-col items-center py-10 text-center">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-line bg-surface text-muted">
-                <Mic size={24} />
-              </span>
-              <p className="mt-4 max-w-[300px] text-[13px] leading-relaxed text-muted">{error}</p>
-              <button
-                onClick={() => void start()}
-                className="mt-5 flex h-10 items-center gap-2 rounded-full bg-accent px-4 text-[12px] font-medium text-accentText transition hover:brightness-110"
-              >
-                <RotateCcw size={14} />
-                Попробовать снова
-              </button>
-            </div>
-          )}
-        </div>
+        {phase === "error" && (
+          <div>
+            <h2 className="pr-10 text-[19px] font-semibold tracking-tight text-ink">Не получилось</h2>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{error}</p>
+
+            <button
+              onClick={() => void start()}
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[13px] font-medium text-accentText transition hover:brightness-110 active:scale-[0.99]"
+            >
+              <RotateCcw size={15} />
+              Попробовать снова
+            </button>
+
+            <button
+              onClick={close}
+              className="mt-2 flex h-11 w-full items-center justify-center rounded-full text-[12.5px] text-muted transition-colors hover:bg-surface2 hover:text-ink"
+            >
+              Закрыть
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
