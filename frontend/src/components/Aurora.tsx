@@ -86,6 +86,7 @@ void main() {
   );
 
   float f = fbm(p + (2.6 + uMid * 0.9) * r + uBass * 0.4);
+  float detail = fbm(p * 3.4 + r * 1.6 + vec2(t * 0.6, -t * 0.4));
 
   vec3 first = mix(uColorA, uColorC, uProgress * 0.45);
   vec3 second = mix(uColorB, uColorA, uProgress * 0.35);
@@ -93,12 +94,21 @@ void main() {
   vec3 color = mix(first, second, clamp(f * 1.7 + 0.5, 0.0, 1.0));
   color = mix(color, uColorC, clamp(length(q) * 0.6, 0.0, 1.0));
 
-  float light = 0.95 + 0.8 * (f + 0.5) + uEnergy * 0.2 + uTreble * 0.15;
+  color *= 0.82 + 0.36 * detail;
+  color = mix(color, color * (1.15 + detail * 0.5), 0.4);
+
+  float light = 0.78 + 0.55 * (f + 0.5) + uEnergy * 0.16 + uTreble * 0.12;
   color *= light;
 
-  float vignette = smoothstep(1.15, 0.25, length(uv - 0.5));
-  color *= 0.65 + 0.35 * vignette;
-  color *= 1.0 - 0.08 * uLight;
+  float vignette = smoothstep(1.1, 0.2, length(uv - 0.5));
+  color *= 0.42 + 0.58 * vignette;
+  color *= 1.0 - 0.12 * uLight;
+
+  float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  color += (grain - 0.5) * 0.018;
+
+  vec3 paper = vec3(0.98, 0.972, 0.955);
+  color = mix(paper, color, mix(1.0, 0.52, uLight));
 
   gl_FragColor = vec4(color, 1.0);
 }
