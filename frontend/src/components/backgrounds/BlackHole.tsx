@@ -17,11 +17,11 @@ export default function BlackHole({ light = false }: Props) {
     const base = Math.min(width, height);
     const cx = width * 0.5;
     const cy = height * 0.63;
-    const radius = base * 0.16;
+    const radius = base * 0.19;
     const tilt = -0.16;
     const flatten = 0.33;
-    const inner = 2.05;
-    const outer = 4.7;
+    const inner = 1.85;
+    const outer = 5.0;
     const spin = time * 0.2;
 
     const hot = light ? mixHex("#fff8ee", accent, 0.18) : "#fff8ee";
@@ -30,9 +30,9 @@ export default function BlackHole({ light = false }: Props) {
 
     ctx.clearRect(0, 0, width, height);
 
-    const glow = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius * 5.6);
-    glow.addColorStop(0, alpha(warm, light ? 0.14 : 0.22));
-    glow.addColorStop(0.42, alpha(warm, light ? 0.06 : 0.09));
+    const glow = ctx.createRadialGradient(cx, cy, radius * 0.5, cx, cy, radius * 6);
+    glow.addColorStop(0, alpha(warm, light ? 0.24 : 0.4));
+    glow.addColorStop(0.4, alpha(warm, light ? 0.1 : 0.16));
     glow.addColorStop(1, alpha(warm, 0));
 
     ctx.fillStyle = glow;
@@ -56,10 +56,10 @@ export default function BlackHole({ light = false }: Props) {
     ctx.scale(1, flatten);
 
     const disk = ctx.createRadialGradient(0, 0, radius * inner, 0, 0, radius * outer);
-    disk.addColorStop(0, alpha(hot, light ? 0.72 : 0.95));
-    disk.addColorStop(0.2, alpha(warm, light ? 0.62 : 0.88));
-    disk.addColorStop(0.52, alpha(mixHex(warm, deep, 0.5), light ? 0.42 : 0.62));
-    disk.addColorStop(0.8, alpha(deep, light ? 0.22 : 0.34));
+    disk.addColorStop(0, alpha(hot, light ? 0.98 : 1));
+    disk.addColorStop(0.2, alpha(warm, light ? 0.9 : 1));
+    disk.addColorStop(0.5, alpha(mixHex(warm, deep, 0.42), light ? 0.7 : 0.82));
+    disk.addColorStop(0.78, alpha(deep, light ? 0.42 : 0.52));
     disk.addColorStop(1, alpha(deep, 0));
 
     ctx.beginPath();
@@ -75,15 +75,15 @@ export default function BlackHole({ light = false }: Props) {
       const length = 0.55 + (index % 5) * 0.24;
       const fade = Math.pow(1 - t, 1.5);
 
-      ctx.strokeStyle = alpha(mixHex(hot, warm, t), fade * (light ? 0.28 : 0.42));
-      ctx.lineWidth = Math.max(1, radius * 0.018);
+      ctx.strokeStyle = alpha(mixHex(hot, warm, t), fade * (light ? 0.42 : 0.62));
+      ctx.lineWidth = Math.max(1.2, radius * 0.024);
       ctx.beginPath();
       ctx.arc(0, 0, orbit, start, start + length);
       ctx.stroke();
     }
 
-    ctx.strokeStyle = alpha(hot, light ? 0.72 : 0.95);
-    ctx.lineWidth = Math.max(1, radius * 0.02);
+    ctx.strokeStyle = alpha(hot, light ? 0.85 : 1);
+    ctx.lineWidth = Math.max(1.2, radius * 0.026);
     ctx.beginPath();
     ctx.arc(0, 0, radius * inner, 0, Math.PI * 2);
     ctx.stroke();
@@ -99,8 +99,8 @@ export default function BlackHole({ light = false }: Props) {
       const to = arcStart + ((arcEnd - arcStart) * (index + 1)) / segments;
       const fade = Math.pow(Math.sin((Math.PI * (index + 0.5)) / segments), 0.55);
 
-      ctx.strokeStyle = alpha(mixHex(hot, warm, index / segments), (light ? 0.62 : 0.92) * fade);
-      ctx.lineWidth = Math.max(1.2, radius * 0.045);
+      ctx.strokeStyle = alpha(mixHex(hot, warm, index / segments), (light ? 0.8 : 1) * fade);
+      ctx.lineWidth = Math.max(1.5, radius * 0.055);
       ctx.beginPath();
       ctx.arc(cx, cy, radius * 1.19, from, to);
       ctx.stroke();
@@ -120,9 +120,9 @@ export default function BlackHole({ light = false }: Props) {
       const y = cy + Math.sin(phase) * orbit * flatten;
       const fade = Math.pow(1 - drift, 1.3);
 
-      ctx.fillStyle = alpha(hot, fade * (light ? 0.3 : 0.55));
+      ctx.fillStyle = alpha(hot, fade * (light ? 0.45 : 0.8));
       ctx.beginPath();
-      ctx.arc(x, y, Math.max(0.6, radius * 0.013), 0, Math.PI * 2);
+      ctx.arc(x, y, Math.max(0.7, radius * 0.016), 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -146,14 +146,14 @@ export default function BlackHole({ light = false }: Props) {
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = alpha(hot, light ? 0.9 : 0.95);
-    ctx.lineWidth = Math.max(1.3, radius * 0.022);
+    ctx.strokeStyle = alpha(hot, 1);
+    ctx.lineWidth = Math.max(1.6, radius * 0.026);
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 1.03, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.strokeStyle = alpha(hot, light ? 0.14 : 0.2);
-    ctx.lineWidth = Math.max(5, radius * 0.1);
+    ctx.strokeStyle = alpha(hot, light ? 0.2 : 0.3);
+    ctx.lineWidth = Math.max(7, radius * 0.14);
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 1.03, 0, Math.PI * 2);
     ctx.stroke();
@@ -171,8 +171,8 @@ export default function BlackHole({ light = false }: Props) {
       0,
       radius * inner * 1.24,
     );
-    band.addColorStop(0, alpha(hot, light ? 0.75 : 0.98));
-    band.addColorStop(0.55, alpha(warm, light ? 0.55 : 0.85));
+    band.addColorStop(0, alpha(hot, light ? 0.9 : 1));
+    band.addColorStop(0.55, alpha(warm, light ? 0.7 : 1));
     band.addColorStop(1, alpha(warm, 0));
 
     const bandSegments = 26;
