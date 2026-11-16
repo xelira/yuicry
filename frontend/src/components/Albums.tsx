@@ -83,35 +83,34 @@ function PlaylistArt({ album }: { album: Album }) {
   }
 
   const seed = hashTitle(album.title);
+  const tint = seed % 2 === 0 ? "#2a1140" : "#101b33";
 
   return (
     <span
       className="relative flex h-full w-full items-center justify-center overflow-hidden"
       style={{
-        background: "linear-gradient(135deg, var(--accent), #2b2350)",
-        filter: `hue-rotate(${seed % 120 - 60}deg)`,
+        background: `linear-gradient(150deg, var(--accent) 0%, ${tint} 78%)`,
       }}
     >
       <span
-        className="absolute inset-0 opacity-50"
+        className="absolute inset-0 opacity-90"
         style={{
-          background: "radial-gradient(120% 120% at 20% 0%, #ffffff55, transparent 55%)",
+          background:
+            "radial-gradient(90% 90% at 78% 8%, rgba(255,255,255,0.35), transparent 60%)",
         }}
       />
       <span
-        className="absolute inset-0 opacity-60"
+        className="absolute inset-0"
         style={{
           background:
-            "repeating-linear-gradient(45deg, transparent 0 14px, rgba(255,255,255,0.045) 14px 15px)",
+            "repeating-linear-gradient(52deg, transparent 0 16px, rgba(255,255,255,0.05) 16px 17px)",
         }}
       />
-      <span className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15" />
-      <span className="absolute left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
-      <span className="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/5" />
-      <Disc3 size={44} className="relative text-white/80 drop-shadow-[0_6px_18px_rgba(0,0,0,0.4)]" />
-      <span className="absolute bottom-3 left-3 text-[9px] uppercase tracking-[0.18em] text-white/60">
-        Плейлист
-      </span>
+      <span className="absolute left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20" />
+      <span className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/12" />
+      <span className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
+      <Disc3 size={46} className="relative text-white/85 drop-shadow-[0_8px_20px_rgba(0,0,0,0.45)]" />
+      <span className="absolute bottom-3 left-3 text-[10px] text-white/70">Плейлист</span>
     </span>
   );
 }
@@ -154,7 +153,7 @@ function PlaylistCard({
           <Play size={15} fill="currentColor" className="ml-0.5" />
         </span>
 
-        <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2 py-1 text-[10px] font-medium text-white/90 backdrop-blur-md">
+        <span className="absolute left-3 top-3 rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-medium text-white/85 backdrop-blur-md">
           {tracksLabel(album.count)}
         </span>
       </div>
@@ -173,9 +172,9 @@ function CreateCard({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="group flex aspect-square flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-lineStrong/60 bg-bg/30 text-muted transition-colors hover:border-accent/60 hover:bg-accent/5 hover:text-ink"
+      className="group flex aspect-square flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-lineStrong/50 bg-bg/25 text-muted transition-[background-color,border-color,color,transform] duration-200 ease-out hover:border-accent/60 hover:bg-accent/5 hover:text-ink active:scale-[0.99]"
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface2 transition-colors group-hover:border-accent/40 group-hover:bg-accent/10 group-hover:text-accent">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-surface2 text-muted transition-[background-color,border-color,color] duration-200 ease-out group-hover:border-accent/40 group-hover:bg-accent/10 group-hover:text-accent">
         <Plus size={20} />
       </span>
       <span className="text-[12px] font-medium">Новый плейлист</span>
@@ -674,8 +673,7 @@ export default function Albums({ onExplore }: Props) {
     <section className="pt-4">
       <div className="flex flex-wrap items-end justify-between gap-4 pb-6">
         <div className="aurora-text">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">Коллекция</p>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight">Плейлисты</h1>
+          <h1 className="text-[28px] font-semibold tracking-tight">Плейлисты</h1>
           <p className="mt-1 text-[12px] text-muted">
             {albums.length === 0
               ? "Пока пусто"

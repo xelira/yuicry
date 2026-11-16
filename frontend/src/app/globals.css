@@ -22,6 +22,8 @@
   --accent-rgb: 255 90 54;
   --accent-text-rgb: 23 7 4;
   --shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --veil: rgb(9 9 12 / 0.33);
   --inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --inset-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
@@ -303,6 +305,28 @@ audio {
   }
   to {
     transform: translateX(320%);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes menu-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
   }
 }
 
